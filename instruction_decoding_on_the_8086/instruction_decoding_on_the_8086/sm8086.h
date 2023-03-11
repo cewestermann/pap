@@ -49,6 +49,5 @@ struct File {
 
 struct File read_entire_file(char* filename);
 static void free_entire_file(struct File* file);
-Instruction decode_single_instruction(u8 first_byte, u8 second_byte);
 void write_instruction_line(FILE* outfile, Instruction inst);
 void set_disp_fields(Instruction* inst, u8* buffer, u8 second_byte);
