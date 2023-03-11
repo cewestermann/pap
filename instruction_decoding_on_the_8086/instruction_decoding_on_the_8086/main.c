@@ -81,19 +81,6 @@ void set_disp_fields(Instruction* inst, u8* buffer, u8 second_byte) {
 	}
 }
 
-Instruction decode_single_instruction(u8 first_byte, u8 second_byte) {
-	Instruction inst = {
-		.opcode = mov_reg_to_reg,
-		.d = (first_byte >> 1) & 1,
-		.w = first_byte & 1,
-		.mod = (second_byte >> 6) & 0b11,
-		.reg = (second_byte >> 3) & 0b111,
-		.r_m = second_byte & 0b111
-	};
-
-	return inst;
-}
-
 void write_instruction_line(FILE* outfile, Instruction inst) {
 	char* reg_field = reg_fields[inst.reg];
 	char* r_m_field = reg_fields[inst.r_m];
