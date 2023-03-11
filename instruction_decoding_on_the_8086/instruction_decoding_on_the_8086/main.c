@@ -8,23 +8,29 @@
 
 int main(int argc, char* argv[]) {
 	u8* buffer;
-	char c;
-	char first_line[100];
+	u8 n = 0;
+	u8 first_byte;
+	u8 second_byte;
+	
 
-	char* to_write;
+	FILE* outfile = fopen("many_register_mov.asm", "w");
 
-	FILE* outfile = fopen("single_register_mov.asm", "w");
-
-	struct File file = read_entire_file("listing_0037_single_register_mov");
+	struct File file = read_entire_file("listing_0038_many_register_mov");
 
 	// Implicitly cast void pointer to char pointer.
 	buffer = file.contents;
-
-	struct Instruction first_inst = decode_single_instruction(buffer);
-
 	fprintf(outfile, "bits 16\n\n");
 
-	write_instruction_line(outfile, first_inst);
+	while (n++ <= file.size) {
+
+		first_byte = *buffer++;
+		second_byte = *buffer++;
+
+		n++; // TODO: Better way to do this ? 
+
+		struct Instruction first_inst = decode_single_instruction(first_byte, second_byte);
+		write_instruction_line(outfile, first_inst);
+	}
 
 	free_entire_file(&file);
 	fclose(outfile);
@@ -32,22 +38,7 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
-void write_instruction_line(FILE* outfile, struct Instruction inst) {
-	char* reg_field = fields[inst.reg];
-	char* r_m_field = fields[inst.r_m];
-
-	if (inst.d == 1) { // REG is the destination
-		fprintf(outfile, "mov %s, %s", reg_field, r_m_field);
-	}
-	else { // REG is the source
-		fprintf(outfile, "mov %s, %s", r_m_field, reg_field);
-	}
-}
-
-struct Instruction decode_single_instruction(char* buffer) {
-	u8 first_byte = *buffer++;
-	u8 second_byte = *buffer++;
-
+struct Instruction decode_single_instruction(u8 first_byte, u8 second_byte) {
 	struct Instruction inst = {
 		.opcode = mov_reg_to_reg,
 		.d = (first_byte >> 1) & 1,
@@ -58,6 +49,18 @@ struct Instruction decode_single_instruction(char* buffer) {
 	};
 
 	return inst;
+}
+
+void write_instruction_line(FILE* outfile, struct Instruction inst) {
+	char* reg_field = fields[inst.reg];
+	char* r_m_field = fields[inst.r_m];
+
+	if (inst.d == 1) { // REG is the destination
+		fprintf(outfile, "mov %s, %s\n", reg_field, r_m_field);
+	}
+	else { // REG is the source
+		fprintf(outfile, "mov %s, %s\n", r_m_field, reg_field);
+	}
 }
 
 struct File read_entire_file(char* filename) {

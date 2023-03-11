@@ -35,5 +35,5 @@ struct File {
 
 struct File read_entire_file(char* filename);
 static void free_entire_file(struct File* file);
-struct Instruction decode_single_instruction(char* buffer);
+struct Instruction decode_single_instruction(u8 first_byte, u8 second_byte);
 void write_instruction_line(FILE* outfile, struct Instruction inst);
