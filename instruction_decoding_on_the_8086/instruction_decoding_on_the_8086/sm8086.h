@@ -11,22 +11,36 @@ typedef uint8_t u8; //_t is platform independent
 // can be negative.
 
 enum OpCode {
-	mov_reg_to_reg
+	mov_reg_to_reg,
+	immediate_to_reg
 };
 
-char* fields[8] = {
+char* reg_fields[8] = {
 	"ax", "cx", "dx", "bx",
 	"sp", "bp", "si", "di"
 };
 
-struct Instruction {
+char* eac[8] = {
+	"bx + si",
+	"bx + di",
+	"bp + si",
+	"bp + di",
+	"si",
+	"di",
+	"direct address",
+	"bx"
+};
+
+typedef struct Instruction {
 	u8 opcode;
 	u8 d;
 	u8 w;
 	u8 mod;
 	u8 reg;
 	u8 r_m;
-};
+	u8 disp_lo;
+	u8 disp_hi;
+} Instruction;
 
 struct File {
 	size_t size;
@@ -35,5 +49,6 @@ struct File {
 
 struct File read_entire_file(char* filename);
 static void free_entire_file(struct File* file);
-struct Instruction decode_single_instruction(u8 first_byte, u8 second_byte);
-void write_instruction_line(FILE* outfile, struct Instruction inst);
+Instruction decode_single_instruction(u8 first_byte, u8 second_byte);
+void write_instruction_line(FILE* outfile, Instruction inst);
+void set_disp_fields(Instruction* inst, u8* buffer, u8 second_byte);

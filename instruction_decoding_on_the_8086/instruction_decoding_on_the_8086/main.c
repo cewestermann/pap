@@ -21,16 +21,22 @@ int main(int argc, char* argv[]) {
 	buffer = file.contents;
 	fprintf(outfile, "bits 16\n\n");
 
-	while (n++ <= file.size) {
+	first_byte = *buffer++;
+	second_byte = *buffer++;
 
-		first_byte = *buffer++;
-		second_byte = *buffer++;
+	if ((first_byte >> 4) & 0b1111 == 0b1000) {
+		// It's a register2register mov
+		Instruction inst;
+		inst.opcode = mov_reg_to_reg;
+		inst.d = (first_byte >> 1) & 1;
+		inst.w = first_byte & 1;
+		inst.reg = (second_byte >> 3) & 0b111;
+		inst.r_m = second_byte & 0b111;
 
-		n++; // TODO: Better way to do this ? 
-
-		struct Instruction first_inst = decode_single_instruction(first_byte, second_byte);
-		write_instruction_line(outfile, first_inst);
+		set_disp_fields(&inst, buffer, second_byte);
 	}
+
+
 
 	free_entire_file(&file);
 	fclose(outfile);
@@ -38,8 +44,45 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
-struct Instruction decode_single_instruction(u8 first_byte, u8 second_byte) {
-	struct Instruction inst = {
+void set_disp_fields(Instruction* inst, u8* buffer, u8 second_byte) {
+	u8 mod = (second_byte >> 6) & 0b11;
+
+	switch (mod) {
+	case 0b00:
+	{
+		if (second_byte & 0b111 == 0b110) {
+			inst->disp_lo = *buffer++;
+			inst->disp_hi = *buffer++;
+		}
+		else {
+			inst->disp_lo = NULL;
+			inst->disp_hi = NULL;
+		}
+	}
+	case 0b01:
+	{
+		inst->disp_lo = *buffer++;
+		inst->disp_hi = NULL;
+	}
+	case 0b10:
+	{
+		inst->disp_lo = *buffer++;
+		inst->disp_hi = *buffer++;
+	}
+	case 0b11:
+	{
+		inst->disp_lo = NULL;
+		inst->disp_hi = NULL;
+
+	}
+	default:
+		printf("MOD instruction not recognized: %x", mod);
+		exit(1);
+	}
+}
+
+Instruction decode_single_instruction(u8 first_byte, u8 second_byte) {
+	Instruction inst = {
 		.opcode = mov_reg_to_reg,
 		.d = (first_byte >> 1) & 1,
 		.w = first_byte & 1,
@@ -51,16 +94,15 @@ struct Instruction decode_single_instruction(u8 first_byte, u8 second_byte) {
 	return inst;
 }
 
-void write_instruction_line(FILE* outfile, struct Instruction inst) {
-	char* reg_field = fields[inst.reg];
-	char* r_m_field = fields[inst.r_m];
+void write_instruction_line(FILE* outfile, Instruction inst) {
+	char* reg_field = reg_fields[inst.reg];
+	char* r_m_field = reg_fields[inst.r_m];
 
 	if (inst.d == 1) { // REG is the destination
 		fprintf(outfile, "mov %s, %s\n", reg_field, r_m_field);
 	}
-	else { // REG is the source
+	else // REG is the source
 		fprintf(outfile, "mov %s, %s\n", r_m_field, reg_field);
-	}
 }
 
 struct File read_entire_file(char* filename) {
