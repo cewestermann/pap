@@ -2,8 +2,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
-
-#define dbg(x) __builtin_dump_struct(&(x), fprintf, stderr)
+#include <stdbool.h>
 
 typedef uint8_t u8; //_t is platform independent
 
@@ -15,9 +14,9 @@ enum OpCode {
 	immediate_to_reg
 };
 
-char* reg_fields[8] = {
-	"ax", "cx", "dx", "bx",
-	"sp", "bp", "si", "di"
+char* reg_fields[2][8] = {
+	{"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh"},
+	{"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"}
 };
 
 char* eac[8] = {
@@ -51,3 +50,4 @@ struct File read_entire_file(char* filename);
 static void free_entire_file(struct File* file);
 void write_instruction_line(FILE* outfile, Instruction inst);
 void set_disp_fields(Instruction* inst, u8* buffer, u8 second_byte);
+bool is_reg2reg(u8 first_byte);

@@ -1,47 +1,45 @@
 #pragma warning(disable : 4996)
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 
 #include "sm8086.h"
 
 int main(int argc, char* argv[]) {
-	u8* buffer;
-	u8 n = 0;
-	u8 first_byte;
-	u8 second_byte;
-	
-
 	FILE* outfile = fopen("many_register_mov.asm", "w");
 
 	struct File file = read_entire_file("listing_0038_many_register_mov");
 
 	// Implicitly cast void pointer to char pointer.
-	buffer = file.contents;
+	u8* buffer = file.contents;
 	fprintf(outfile, "bits 16\n\n");
 
-	first_byte = *buffer++;
-	second_byte = *buffer++;
+	for (size_t n = 0; n < file.size; n += 2) {
+		u8 first_byte = *buffer++;
+		u8 second_byte = *buffer++;
 
-	if ((first_byte >> 4) & 0b1111 == 0b1000) {
-		// It's a register2register mov
-		Instruction inst;
-		inst.opcode = mov_reg_to_reg;
-		inst.d = (first_byte >> 1) & 1;
-		inst.w = first_byte & 1;
-		inst.reg = (second_byte >> 3) & 0b111;
-		inst.r_m = second_byte & 0b111;
+		if (is_reg2reg(first_byte)) {
+			// It's a register2register mov
+			Instruction inst;
+			inst.opcode = mov_reg_to_reg;
+			inst.d = (first_byte >> 1) & 1;
+			inst.w = first_byte & 1;
+			inst.reg = (second_byte >> 3) & 0b111;
+			inst.r_m = second_byte & 0b111;
 
-		set_disp_fields(&inst, buffer, second_byte);
+			set_disp_fields(&inst, buffer, second_byte);
+
+			write_instruction_line(outfile, inst);
+		}
 	}
-
-
 
 	free_entire_file(&file);
 	fclose(outfile);
 
-	return 0;
+	return EXIT_SUCCESS;
+}
+
+bool is_reg2reg(u8 first_byte) {
+	return (((first_byte >> 4) & 0b1111) == 0b1000);
 }
 
 void set_disp_fields(Instruction* inst, u8* buffer, u8 second_byte) {
@@ -54,36 +52,31 @@ void set_disp_fields(Instruction* inst, u8* buffer, u8 second_byte) {
 			inst->disp_lo = *buffer++;
 			inst->disp_hi = *buffer++;
 		}
-		else {
-			inst->disp_lo = NULL;
-			inst->disp_hi = NULL;
-		}
+		break;
 	}
 	case 0b01:
 	{
 		inst->disp_lo = *buffer++;
-		inst->disp_hi = NULL;
+		break;
 	}
 	case 0b10:
 	{
 		inst->disp_lo = *buffer++;
 		inst->disp_hi = *buffer++;
+		break;
 	}
 	case 0b11:
-	{
-		inst->disp_lo = NULL;
-		inst->disp_hi = NULL;
+		break;
 
-	}
 	default:
 		printf("MOD instruction not recognized: %x", mod);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 }
 
 void write_instruction_line(FILE* outfile, Instruction inst) {
-	char* reg_field = reg_fields[inst.reg];
-	char* r_m_field = reg_fields[inst.r_m];
+	char* reg_field = reg_fields[inst.w][inst.reg];
+	char* r_m_field = reg_fields[inst.w][inst.r_m];
 
 	if (inst.d == 1) { // REG is the destination
 		fprintf(outfile, "mov %s, %s\n", reg_field, r_m_field);
@@ -114,7 +107,7 @@ struct File read_entire_file(char* filename) {
 	}
 	else {
 		printf("ERROR: Unable to load \"%s\"\n", filename);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	
