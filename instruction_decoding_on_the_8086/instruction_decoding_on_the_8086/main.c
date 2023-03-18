@@ -7,7 +7,7 @@
 int main(int argc, char* argv[]) {
 	FILE* outfile = fopen("many_register_mov.asm", "w");
 
-	struct File file = read_entire_file("listing_0038_many_register_mov");
+	struct File file = read_entire_file("listing_0039_more_movs");
 
 	// Implicitly cast void pointer to char pointer.
 	u8* buffer = file.contents;
@@ -17,7 +17,11 @@ int main(int argc, char* argv[]) {
 		u8 first_byte = *buffer++;
 		u8 second_byte = *buffer++;
 
-		if (is_reg2reg(first_byte)) {
+		u8 mtype = mov_type(first_byte);
+
+		switch (mtype) {
+		case 0b1000:
+		{
 			// It's a register2register mov
 			Instruction inst;
 			inst.opcode = mov_reg_to_reg;
@@ -26,10 +30,35 @@ int main(int argc, char* argv[]) {
 			inst.reg = (second_byte >> 3) & 0b111;
 			inst.r_m = second_byte & 0b111;
 
-			set_disp_fields(&inst, buffer, second_byte);
+			set_reg_disp_fields(&inst, buffer, second_byte);
 
 			write_instruction_line(outfile, inst);
+			break;
 		}
+		case 0b1011:
+		{
+			// It's an immediate to register mov
+			ImmediateInstruction inst;
+			inst.w = (first_byte >> 3) & 1;
+			inst.reg = first_byte & 0b111;
+			if (inst.w == 0) {
+				inst.data = second_byte;
+			}
+			else {
+				u16 third_byte = *buffer++;
+				inst.data = second_byte + third_byte; // Third byte
+				printf("%u\n", inst.data);
+				n++;
+			}
+
+			write_imm_instruction_line(outfile, inst);
+			break;
+		}
+		default:
+			printf("%d is not a recognized mov type", mtype);
+			exit(EXIT_FAILURE);
+		}
+
 	}
 
 	free_entire_file(&file);
@@ -38,11 +67,11 @@ int main(int argc, char* argv[]) {
 	return EXIT_SUCCESS;
 }
 
-bool is_reg2reg(u8 first_byte) {
-	return (((first_byte >> 4) & 0b1111) == 0b1000);
+u8 mov_type(u8 first_byte) {
+	return ((first_byte >> 4) & 0b1111);
 }
 
-void set_disp_fields(Instruction* inst, u8* buffer, u8 second_byte) {
+void set_reg_disp_fields(Instruction* inst, u8* buffer, u8 second_byte) {
 	u8 mod = (second_byte >> 6) & 0b11;
 
 	switch (mod) {
@@ -75,14 +104,25 @@ void set_disp_fields(Instruction* inst, u8* buffer, u8 second_byte) {
 }
 
 void write_instruction_line(FILE* outfile, Instruction inst) {
-	char* reg_field = reg_fields[inst.w][inst.reg];
-	char* r_m_field = reg_fields[inst.w][inst.r_m];
+	char const*const reg_field = reg_fields[inst.w][inst.reg];
+	char const*const r_m_field = reg_fields[inst.w][inst.r_m];
+
 
 	if (inst.d == 1) { // REG is the destination
 		fprintf(outfile, "mov %s, %s\n", reg_field, r_m_field);
-	}
-	else // REG is the source
+	} else // REG is the source
 		fprintf(outfile, "mov %s, %s\n", r_m_field, reg_field);
+}
+
+void write_imm_instruction_line(FILE* outfile, ImmediateInstruction inst) {
+	// If w == 0, only use the first byte.
+	// If w == 1, use both bytes. 
+
+	char const*const reg_field = reg_fields[inst.w][inst.reg];
+
+
+
+	fprintf(outfile, "mov %s, %i\n", reg_field, inst.data);
 }
 
 struct File read_entire_file(char* filename) {
