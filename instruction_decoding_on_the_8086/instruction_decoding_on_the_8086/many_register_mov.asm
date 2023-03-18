@@ -5,9 +5,9 @@ mov dh, al
 mov cl, 12
 mov ch, 244
 mov cx, 12
-mov cx, 499
-mov dx, 123
-mov dx, 388
+mov cx, -12
+mov dx, 3948
+mov dx, -3948
 mov al, al
 mov bx, bx
 mov dx, si

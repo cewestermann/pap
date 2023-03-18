@@ -46,7 +46,7 @@ typedef struct Instruction {
 typedef struct ImmediateInstruction {
 	u8 w;
 	u8 reg;
-	u16 data;
+	i16 data;
 } ImmediateInstruction;
 
 struct File {

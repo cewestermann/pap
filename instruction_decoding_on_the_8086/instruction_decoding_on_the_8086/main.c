@@ -41,13 +41,11 @@ int main(int argc, char* argv[]) {
 			ImmediateInstruction inst;
 			inst.w = (first_byte >> 3) & 1;
 			inst.reg = first_byte & 0b111;
-			if (inst.w == 0) {
-				inst.data = second_byte;
-			}
-			else {
-				u16 third_byte = *buffer++;
-				inst.data = second_byte + third_byte; // Third byte
-				printf("%u\n", inst.data);
+			// NOTE: We need to sign extend, i.e., pad with the most significant bit.
+
+			inst.data = second_byte;
+			if (inst.w) {
+				inst.data |= (*buffer++ << 8);
 				n++;
 			}
 
