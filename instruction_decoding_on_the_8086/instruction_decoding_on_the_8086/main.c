@@ -31,7 +31,20 @@ int main(int argc, char* argv[]) {
 			inst.r_m = second_byte & 0b111;
 
 			set_reg_disp_fields(&inst, buffer, second_byte);
-
+            
+            if (!inst.disp_lo && !inst.disp_hi) {
+                // No displacement bits, i.e., mod = 00
+                write_eac_mod_00(inst.r_m);
+            } else if (inst.disp_lo && !inst.disp_hi) {
+                // 8 bit displacement, i.e., mod = 01
+                write_eac_mod_01(inst.r_m);
+            } else if (inst.disp_lo && inst.disp_hi) {
+                // 16 bit displacement, i.e., mod = 10
+                write_eac_mod_10(inst.r_m);
+            } else {
+                printf("No such mod type");
+                exit(EXIT_FAILURE);
+            }
 			write_instruction_line(outfile, inst);
 			break;
 		}
@@ -43,7 +56,7 @@ int main(int argc, char* argv[]) {
 			inst.reg = first_byte & 0b111;
 			// NOTE: We need to sign extend, i.e., pad with the most significant bit.
 
-			inst.data = second_byte;
+			inst.data = second_byte; // TODO: Why is this 244 in one case ?
 			if (inst.w) {
 				inst.data |= (*buffer++ << 8);
 				n++;
@@ -75,7 +88,7 @@ void set_reg_disp_fields(Instruction* inst, u8* buffer, u8 second_byte) {
 	switch (mod) {
 	case 0b00:
 	{
-		if (second_byte & 0b111 == 0b110) {
+		if ((second_byte & 0b111) == 0b110) {
 			inst->disp_lo = *buffer++;
 			inst->disp_hi = *buffer++;
 		}
