@@ -57,9 +57,9 @@ struct File {
 struct File read_entire_file(char* filename);
 static void free_entire_file(struct File* file);
 void write_instruction_line(FILE* outfile, Instruction inst);
-void write_eac_mod_00(u8 r_m);
-void write_eac_mod_01(u8 r_m);
-void write_eac_mod_10(u8 r_m);
+void write_eac_mod_00(FILE* outfile, Instruction* inst);
+void write_eac_mod_01(FILE* outfile, Instruction* inst);
+void write_eac_mod_10(FILE* outfile, Instruction* inst);
 void write_imm_instruction_line(FILE* outfile, ImmediateInstruction inst);
 void set_reg_disp_fields(Instruction* inst, u8* buffer, u8 second_byte);
 u8 mov_type(u8 first_byte);

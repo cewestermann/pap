@@ -32,15 +32,16 @@ int main(int argc, char* argv[]) {
 
 			set_reg_disp_fields(&inst, buffer, second_byte);
             
+            // TODO: Clean this up
             if (!inst.disp_lo && !inst.disp_hi) {
                 // No displacement bits, i.e., mod = 00
-                write_eac_mod_00(inst.r_m);
+                write_eac_mod_00(&inst);
             } else if (inst.disp_lo && !inst.disp_hi) {
                 // 8 bit displacement, i.e., mod = 01
-                write_eac_mod_01(inst.r_m);
+                write_eac_mod_01(&inst);
             } else if (inst.disp_lo && inst.disp_hi) {
                 // 16 bit displacement, i.e., mod = 10
-                write_eac_mod_10(inst.r_m);
+                write_eac_mod_10(&inst);
             } else {
                 printf("No such mod type");
                 exit(EXIT_FAILURE);
@@ -76,6 +77,20 @@ int main(int argc, char* argv[]) {
 	fclose(outfile);
 
 	return EXIT_SUCCESS;
+}
+
+void write_eac_mod_00(FILE* outfile, Instruction* inst) {
+    fprintf(outfile, "%s\n", eac[inst->r_m]);
+}
+
+void write_eac_mod_01(FILE* outfile, Instruction* inst) {
+    fprintf(outfile, "%s + %d\n", eac[inst->r_m], inst->disp_lo);
+}
+
+void write_eac_mod_10(FILE* outfile, Instruction* inst) {
+    i16 data = (inst->disp_hi << 8);
+    data |= inst->disp_lo;
+    fprintf(outfile, "%s + %d\n", eac[inst->r_m], data);
 }
 
 u8 mov_type(u8 first_byte) {
