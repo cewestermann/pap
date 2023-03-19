@@ -35,13 +35,13 @@ int main(int argc, char* argv[]) {
             // TODO: Clean this up
             if (!inst.disp_lo && !inst.disp_hi) {
                 // No displacement bits, i.e., mod = 00
-                write_eac_mod_00(&inst);
+                write_eac_mod_00(outfile, &inst);
             } else if (inst.disp_lo && !inst.disp_hi) {
                 // 8 bit displacement, i.e., mod = 01
-                write_eac_mod_01(&inst);
+                write_eac_mod_01(outfile, &inst);
             } else if (inst.disp_lo && inst.disp_hi) {
                 // 16 bit displacement, i.e., mod = 10
-                write_eac_mod_10(&inst);
+                write_eac_mod_10(outfile, &inst);
             } else {
                 printf("No such mod type");
                 exit(EXIT_FAILURE);
@@ -99,6 +99,7 @@ u8 mov_type(u8 first_byte) {
 
 void set_reg_disp_fields(Instruction* inst, u8* buffer, u8 second_byte) {
 	u8 mod = (second_byte >> 6) & 0b11;
+    printf("%u\n", mod);
 
 	switch (mod) {
 	case 0b00:
@@ -124,6 +125,8 @@ void set_reg_disp_fields(Instruction* inst, u8* buffer, u8 second_byte) {
 		break;
 
 	default:
+        // TODO: Why do we not catch 0 mod time? (the third 0 appearance
+        // to be specific).
 		printf("MOD instruction not recognized: %x", mod);
 		exit(EXIT_FAILURE);
 	}
@@ -145,8 +148,6 @@ void write_imm_instruction_line(FILE* outfile, ImmediateInstruction inst) {
 	// If w == 1, use both bytes. 
 
 	char const*const reg_field = reg_fields[inst.w][inst.reg];
-
-
 
 	fprintf(outfile, "mov %s, %i\n", reg_field, inst.data);
 }
@@ -175,8 +176,6 @@ struct File read_entire_file(char* filename) {
 		printf("ERROR: Unable to load \"%s\"\n", filename);
 		exit(EXIT_FAILURE);
 	}
-
-	
 	return result;
 }
 
