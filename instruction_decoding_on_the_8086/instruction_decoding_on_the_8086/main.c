@@ -25,13 +25,6 @@ enum encoding_type get_encoding_type(u8 first_byte) {
 
 
 
-
-
-
-
-
-
-
 struct File read_entire_file(char* filename) {
 	struct File result;
 
