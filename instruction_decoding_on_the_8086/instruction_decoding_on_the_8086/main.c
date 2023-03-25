@@ -1,28 +1,21 @@
 #pragma warning(disable : 4996)
 
-#include <stdlib.h>
-
 #include "sm8086.h"
+
+#define BIT_STRING(bits) (#bits)
 
 int main(int argc, char* argv[]) {
 	FILE* outfile = fopen("completionist_decode.asm", "w");
 
 	struct File file = read_entire_file("listing_0042_completionist_decode");
-
 	// Implicitly cast void pointer to char pointer.
 	u8* buffer = file.contents;
 
-	enum encoding_type etype = get_encoding_type(*buffer++);
+	u8 some_byte = 0b1011;
+
 
 	return(EXIT_SUCCESS);
 }
-
-enum encoding_type get_encoding_type(u8 first_byte) {
-	switch (first_byte) {
-		case 
-	}
-}
-
 
 
 struct File read_entire_file(char* filename) {
