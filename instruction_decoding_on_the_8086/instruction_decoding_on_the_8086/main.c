@@ -10,13 +10,34 @@ int main(int argc, char* argv[]) {
 	struct File file = read_entire_file("listing_0042_completionist_decode");
 	// Implicitly cast void pointer to char pointer.
 	u8* buffer = file.contents;
+	u8 first_byte = *buffer++;
 
-	u8 some_byte = 0b1011;
+	u8 itype = get_instruction_type(first_byte);
+
+	switch (itype) {
+	case reg2reg: decode_reg2reg(first_byte, buffer, outfile); break;
+	}
 
 
 	return(EXIT_SUCCESS);
 }
 
+u8 get_instruction_type(u8 first_byte) {
+	u8 match;
+	for (size_t i = 0; i < type_count; i++) {
+		u8 diff = 8 - instructions[i].length;
+
+		if ((first_byte >> diff) == instructions[i].byte) {
+			declare_match(i);
+			match = i;
+		}
+	}
+	return match;
+}
+
+static void declare_match(u8 idx) {
+	printf("Current instruction: %s\n", instruction_type_strings[idx]);
+}
 
 struct File read_entire_file(char* filename) {
 	struct File result;

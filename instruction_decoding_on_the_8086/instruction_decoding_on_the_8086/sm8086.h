@@ -22,7 +22,7 @@ struct File {
 	void* contents; // Void pointer (A generic pointer that does not need an explicit type)
 };
 
-enum instruction_type {
+typedef enum {
 	reg2reg,
 	imm2mem,
 	imm2reg,
@@ -31,6 +31,17 @@ enum instruction_type {
 	reg2seg,
 	seg2reg,
 	type_count
+} instruction_type;
+
+const char* instruction_type_strings[] = {
+	"reg2reg",
+	"imm2mem",
+	"imm2reg",
+	"mem2acc",
+	"acc2mem",
+	"reg2seg",
+	"seg2reg",
+	"type_count"
 };
 
 InstructionByte instructions[type_count] = {
@@ -46,4 +57,7 @@ InstructionByte instructions[type_count] = {
 
 struct File read_entire_file(char* filename);
 static void free_entire_file(struct File* file);
-enum instruction_type get_instruction_type(u8 first_byte);
+static void declare_match(u8 idx);
+u8 get_instruction_type(u8 first_byte);
+
+void decode_reg2reg(u8 first_byte, u8* buffer, FILE* outfile);
