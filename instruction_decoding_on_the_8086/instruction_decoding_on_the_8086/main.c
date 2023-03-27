@@ -1,11 +1,12 @@
 #pragma warning(disable : 4996)
 
+#include "common.h"
 #include "sm8086.h"
 
 int main(int argc, char* argv[]) {
 	FILE* outfile = fopen("completionist_decode.asm", "w");
 
-	struct File file = read_entire_file("listing_0042_completionist_decode");
+	struct File file = read_entire_file("encodings\\listing_0042_completionist_decode");
 	// Implicitly cast void pointer to char pointer.
 	u8* buffer = file.contents;
 	u8 first_byte = *buffer++;
@@ -31,22 +32,6 @@ u8 get_instruction_type(u8 first_byte) {
 		}
 	}
 	return match;
-}
-
-void decode_reg2reg(u8 first_byte, u8* buffer, FILE* outfile) {
-	u8 d = ((first_byte >> 1) & 1);
-	u8 w = first_byte & 1;
-
-	u8 second_byte = *buffer++;
-	u8 mod = ((second_byte >> 6) & 0b11);
-	u8 reg = ((second_byte >> 3) & 0b111);
-	u8 r_m = second_byte & 0b111;
-
-	switch (mod) {
-	case 0: break;
-	}
-
-
 }
 
 static void declare_match(u8 idx) {

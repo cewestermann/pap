@@ -1,18 +1,13 @@
 #pragma once
 
+#ifndef SM8086_H
+#define SM8086_H
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 
 #define N_ENCODING_FIELDS 8
-
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-
-typedef int8_t i8;
-typedef int16_t i16;
-typedef int32_t i32;
 
 typedef struct InstructionByte {
 	u8 byte;
@@ -34,23 +29,6 @@ typedef enum {
 	seg2reg,
 	type_count
 } instruction_type;
-
-const char* mod_11_encoding[2][N_ENCODING_FIELDS] = {
-	{"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh"},
-	{"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"}
-};
-
-const char* eac[N_ENCODING_FIELDS] = {
-	"bx + si",
-	"bx + di",
-	"bp + si",
-	"bp + di",
-	"si",
-	"di",
-	"direct adress",
-	"bx",
-};
-
 
 const char* instruction_type_strings[] = {
 	"reg2reg",
@@ -79,4 +57,4 @@ static void free_entire_file(struct File* file);
 static void declare_match(u8 idx);
 u8 get_instruction_type(u8 first_byte);
 
-void decode_reg2reg(u8 first_byte, u8* buffer, FILE* outfile);
+#endif
