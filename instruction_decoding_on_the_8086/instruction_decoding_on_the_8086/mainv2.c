@@ -1,6 +1,14 @@
-#pragma warning(disable : 4996)
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
 
-#include "sm8086.h"
+typedef uint8_t u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+
+typedef int8_t i8;
+typedef int16_t i16;
+typedef int32_t i32;
 
 typedef struct InstructionByte {
 	u8 byte;
@@ -45,10 +53,26 @@ InstructionByte instructions[type_count] = {
 	[seg2reg] = {0b10001100, 8}
 };
 
+typedef struct Instruction {
+	u8 d;
+	u8 w;
+	u8 mod;
+	u8 reg;
+	u8 r_m;
+	u8 disp_lo;
+	u8 disp_hi;
+	u8 addr_lo;
+	u8 addr_hi;
+	u8 sr;
+	i32 data;
+} Instruction;
+
 static struct File read_entire_file(char* filename);
 static void free_entire_file(struct File* file);
-static void declare_match(u8 idx);
+static void declare_match(size_t idx);
 static u8 get_instruction_type(u8 first_byte);
+static u8 get_mod_encoding(u8 second_byte);
+static u8 get_r_m_encoding(u8 second_byte);
 
 int main(int argc, char* argv[]) {
 	FILE* outfile = fopen("bleb.asm", "w");
@@ -56,35 +80,82 @@ int main(int argc, char* argv[]) {
 	struct File file = read_entire_file("encodings\\listing_0038_many_register_mov");
 	// Implicitly cast void pointer to char pointer.
 	u8* buffer = file.contents;
-	u8 first_byte;
 
-	while ((first_byte = *buffer++) != EOF) {
+	for (size_t n = 0; n < file.size; n += 2) {
+		Instruction inst = { 0 };
+
+		u8 first_byte = *buffer++;
+		u8 second_byte = *buffer++;
 
 		u8 itype = get_instruction_type(first_byte);
 
 		switch (itype) {
-		case reg2reg: decode_reg2reg(first_byte, buffer, outfile); break;
-		case imm2reg: decode_imm2reg(first_byte, buffer, outfile); break;
+		case reg2reg:
+		{
+			inst.d = ((first_byte >> 1) & 1);
+			inst.w = first_byte & 1;
+			inst.mod = get_mod_encoding(second_byte);
+			inst.reg = ((second_byte >> 3) & 0b111);
+			inst.r_m = get_r_m_encoding(second_byte);
+
+			if (inst.mod == 0b01) {
+				inst.disp_lo = *buffer++;
+				inst.data = inst.disp_lo;
+				n++;
+			}
+			if (inst.mod == 0b10) {
+				inst.disp_lo = *buffer++;
+				inst.disp_hi = *buffer++;
+				inst.data = (inst.disp_hi << 8 | inst.disp_lo);
+				n += 2;
+			}
+
+
+
+
+
 		}
+		}
+
+
 	}
-	return(EXIT_SUCCESS);
+
+}
+
+
+static u8 get_mod_encoding(u8 second_byte) {
+	// The mod bits do not seem to change position, so we can
+	// use a function for this.
+	return ((second_byte >> 6) & 0b11);
+}
+
+static u8 get_r_m_encoding(u8 second_byte) {
+	// r_m field does not seem to change position, so we can use
+	// a function for this.
+	return second_byte & 0b111;
 }
 
 static u8 get_instruction_type(u8 first_byte) {
-	u8 match;
-	for (u8 i = 0; i < type_count; i++) {
-		size_t diff = 8 - instructions[i].length;
+	size_t i;
 
+	for (i = 0; i < type_count; i++) {
+		size_t diff = 8 - instructions[i].length;
 		if ((first_byte >> diff) == instructions[i].byte) {
 			declare_match(i);
-			match = i;
+			break;
 		}
 	}
-	return match;
+
+	if (i == type_count) {
+		printf("Exceeded number of types. No matching type found.\n");
+		exit(EXIT_FAILURE);
+	}
+
+	return i;
 }
 
-static void declare_match(u8 idx) {
-	printf("Current instruction: %s\n", instruction_type_strings[idx]);
+static void declare_match(size_t idx) {
+	printf("Instruction: %s\n", instruction_type_strings[idx]);
 }
 
 static struct File read_entire_file(char* filename) {
@@ -94,11 +165,11 @@ static struct File read_entire_file(char* filename) {
 
 	if (file) {
 		// Go to end
-		fseek(file, 0, SEEK_END); 
+		fseek(file, 0, SEEK_END);
 		// Get file size (returns number of bytes to position of file position)
 		result.size = ftell(file);
 		// Go back to beginning
-		fseek(file, 0, SEEK_SET); 
+		fseek(file, 0, SEEK_SET);
 
 		// Allocate memory to the contents of the file
 		result.contents = malloc(result.size);

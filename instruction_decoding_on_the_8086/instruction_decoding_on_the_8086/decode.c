@@ -90,3 +90,12 @@ void decode_reg2reg(u8 first_byte, u8* buffer, FILE* outfile) {
 	}
 }
 
+void decode_imm2reg(u8 first_byte, u8* buffer, FILE* outfile) {
+	u8 w = (first_byte >> 3) & 1;
+	u8 reg = first_byte & 0b111;
+
+	u8 second_byte = *buffer++;
+
+	i16 data = (w) ? (second_byte << 8 | *buffer++) : second_byte;
+	fprintf(outfile, "%s, %d\n", registers[w][reg], data);
+}
