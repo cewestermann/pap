@@ -122,7 +122,25 @@ int main(int argc, char* argv[]) {
 
 		switch (itype) {
 		case reg2reg: decode_reg2reg(outfile, &ops, buffer, &n); break;
-		case imm2reg: decode_imm2reg(outfile, &ops, buffer, &n); break;
+		case imm2reg: 
+		{
+			Instruction inst = {
+			.w = (ops.first_byte >> 3) & 1,
+			.reg = ops.first_byte & 0b111
+			};
+
+			if (inst.w) {
+				u8 third_byte = *buffer++;
+				n++;
+				inst.data = (third_byte << 8 | ops.second_byte);
+			}
+			else
+				inst.data = ops.second_byte;
+
+			const char* const dst_reg = registers[inst.w][inst.reg];
+
+			fprintf(outfile, "mov %s, %d\n", dst_reg, inst.data);
+		} break;
 		default: printf("No such itype: %zu\n", itype);          exit(EXIT_FAILURE);
 		}
 	}
