@@ -1,3 +1,5 @@
+#pragma warning(disable : 4996)
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -9,6 +11,24 @@ typedef uint32_t u32;
 typedef int8_t i8;
 typedef int16_t i16;
 typedef int32_t i32;
+
+#define N_ENCODING_FIELDS 8
+
+const char* registers[2][N_ENCODING_FIELDS] = {
+	{"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh"},
+	{"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"}
+};
+
+const char* eac[N_ENCODING_FIELDS] = {
+	"bx + si",
+	"bx + di",
+	"bp + si",
+	"bp + di",
+	"si",
+	"di",
+	"direct adress",
+	"bx",
+};
 
 typedef struct InstructionByte {
 	u8 byte;
@@ -70,9 +90,12 @@ typedef struct Instruction {
 static struct File read_entire_file(char* filename);
 static void free_entire_file(struct File* file);
 static void declare_match(size_t idx);
-static u8 get_instruction_type(u8 first_byte);
+static size_t get_instruction_type(u8 first_byte);
 static u8 get_mod_encoding(u8 second_byte);
 static u8 get_r_m_encoding(u8 second_byte);
+static void write_mod11_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
+static void write_eac_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
+static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data);
 
 int main(int argc, char* argv[]) {
 	FILE* outfile = fopen("bleb.asm", "w");
@@ -87,7 +110,7 @@ int main(int argc, char* argv[]) {
 		u8 first_byte = *buffer++;
 		u8 second_byte = *buffer++;
 
-		u8 itype = get_instruction_type(first_byte);
+		size_t itype = get_instruction_type(first_byte);
 
 		switch (itype) {
 		case reg2reg:
@@ -98,28 +121,52 @@ int main(int argc, char* argv[]) {
 			inst.reg = ((second_byte >> 3) & 0b111);
 			inst.r_m = get_r_m_encoding(second_byte);
 
-			if (inst.mod == 0b01) {
+			char const* const reg_field = registers[inst.w][inst.reg];
+			char const* const r_m_field = registers[inst.w][inst.r_m];
+
+			switch (inst.mod) {
+			case 0b11: write_mod11_to_file(outfile, inst.d, reg_field, r_m_field); break;
+			case 0b00: write_eac_to_file(outfile, inst.d, reg_field, r_m_field); break;
+			case 0b01:
+			{
 				inst.disp_lo = *buffer++;
 				inst.data = inst.disp_lo;
 				n++;
+				write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data);
 			}
-			if (inst.mod == 0b10) {
+			case 0b10:
+			{
 				inst.disp_lo = *buffer++;
 				inst.disp_hi = *buffer++;
 				inst.data = (inst.disp_hi << 8 | inst.disp_lo);
 				n += 2;
+				write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data);
 			}
-
-
-
-
-
+			default:
+				printf("ERROR: No such MOD number: %d", inst.mod);
+				exit(EXIT_FAILURE);
+			}
 		}
 		}
-
-
 	}
+}
 
+static void write_mod11_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field) {
+	if (d) // reg_field is the destination
+		fprintf(outfile, "mov %s, %s\n", reg_field, r_m_field);
+	else // reg_field is the source
+		fprintf(outfile, "mov %s, %s\n", r_m_field, reg_field);
+}
+
+static void write_eac_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field) {
+	if (d)
+		fprintf(outfile, "mov %s, [%s]\n", reg_field, r_m_field);
+	else
+		fprintf(outfile, "mov [%s], %s\n", r_m_field, reg_field);
+}
+
+static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data) {
+	fprintf(outfile, "mov %s, %d\n", reg_field, data);
 }
 
 
@@ -135,7 +182,7 @@ static u8 get_r_m_encoding(u8 second_byte) {
 	return second_byte & 0b111;
 }
 
-static u8 get_instruction_type(u8 first_byte) {
+static size_t get_instruction_type(u8 first_byte) {
 	size_t i;
 
 	for (i = 0; i < type_count; i++) {
