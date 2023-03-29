@@ -87,6 +87,12 @@ typedef struct Instruction {
 	i32 data;
 } Instruction;
 
+typedef struct Ops {
+	u8 first_byte;
+	u8 second_byte;
+	u8* buffer;
+} Ops;
+
 static struct File read_entire_file(char* filename);
 static void free_entire_file(struct File* file);
 static void declare_match(size_t idx);
@@ -96,58 +102,65 @@ static u8 get_r_m_encoding(u8 second_byte);
 static void write_mod11_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
 static void write_eac_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
 static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data);
+static void decode_reg2reg(FILE* outfile, Ops* ops, size_t* n);
 
 int main(int argc, char* argv[]) {
 	FILE* outfile = fopen("bleb.asm", "w");
 
-	struct File file = read_entire_file("encodings\\listing_0038_many_register_mov");
+	struct File file = read_entire_file("sim8086\\encodings\\listing_0038_many_register_mov");
 	// Implicitly cast void pointer to char pointer.
 	u8* buffer = file.contents;
 
 	for (size_t n = 0; n < file.size; n += 2) {
 		Instruction inst = { 0 };
 
-		u8 first_byte = *buffer++;
-		u8 second_byte = *buffer++;
+		Ops ops = {
+			.first_byte = *buffer++,
+			.second_byte = *buffer++,
+			.buffer = buffer
+		};
 
-		size_t itype = get_instruction_type(first_byte);
+		size_t itype = get_instruction_type(ops.first_byte);
 
 		switch (itype) {
-		case reg2reg:
-		{
-			inst.d = ((first_byte >> 1) & 1);
-			inst.w = first_byte & 1;
-			inst.mod = get_mod_encoding(second_byte);
-			inst.reg = ((second_byte >> 3) & 0b111);
-			inst.r_m = get_r_m_encoding(second_byte);
-
-			char const* const reg_field = registers[inst.w][inst.reg];
-			char const* const r_m_field = registers[inst.w][inst.r_m];
-
-			switch (inst.mod) {
-			case 0b11: write_mod11_to_file(outfile, inst.d, reg_field, r_m_field); break;
-			case 0b00: write_eac_to_file(outfile, inst.d, reg_field, r_m_field); break;
-			case 0b01:
-			{
-				inst.disp_lo = *buffer++;
-				inst.data = inst.disp_lo;
-				n++;
-				write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data);
-			}
-			case 0b10:
-			{
-				inst.disp_lo = *buffer++;
-				inst.disp_hi = *buffer++;
-				inst.data = (inst.disp_hi << 8 | inst.disp_lo);
-				n += 2;
-				write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data);
-			}
-			default:
-				printf("ERROR: No such MOD number: %d", inst.mod);
-				exit(EXIT_FAILURE);
-			}
+		case reg2reg: decode_reg2reg(outfile, &ops, &n);
 		}
-		}
+	}
+}
+
+static void decode_reg2reg(FILE* outfile, Ops* ops, size_t* n) {
+	Instruction inst = {
+		.d = ((ops->first_byte >> 1) & 1),
+		.w = ops->first_byte & 1,
+		.mod = get_mod_encoding(ops->second_byte),
+		.reg = ((ops->second_byte >> 3) & 0b111),
+		.r_m = get_r_m_encoding(ops->second_byte),
+	};
+
+	char const* const reg_field = registers[inst.w][inst.reg];
+	char const* const r_m_field = registers[inst.w][inst.r_m];
+
+	switch (inst.mod) {
+	case 0b11: write_mod11_to_file(outfile, inst.d, reg_field, r_m_field); break;
+	case 0b00: write_eac_to_file(outfile, inst.d, reg_field, r_m_field); break;
+	case 0b01:
+	{
+		inst.disp_lo = *ops->buffer++;
+		inst.data = inst.disp_lo;
+		(*n)++;
+		write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data);
+	}
+	case 0b10:
+	{
+		inst.disp_lo = *ops->buffer++;
+		inst.disp_hi = *ops->buffer++;
+		inst.data = (inst.disp_hi << 8 | inst.disp_lo);
+		(*n) += 2;
+		write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data);
+	}
+	default:
+		printf("ERROR: No such MOD number: %d", inst.mod);
+		exit(EXIT_FAILURE);
 	}
 }
 
