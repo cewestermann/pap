@@ -107,13 +107,11 @@ static void decode_reg2reg(FILE* outfile, Ops* ops, size_t* n);
 int main(int argc, char* argv[]) {
 	FILE* outfile = fopen("bleb.asm", "w");
 
-	struct File file = read_entire_file("sim8086\\encodings\\listing_0038_many_register_mov");
+	struct File file = read_entire_file("sim8086\\encodings\\listing_0039_more_movs");
 	// Implicitly cast void pointer to char pointer.
 	u8* buffer = file.contents;
 
 	for (size_t n = 0; n < file.size; n += 2) {
-		Instruction inst = { 0 };
-
 		Ops ops = {
 			.first_byte = *buffer++,
 			.second_byte = *buffer++,
@@ -123,7 +121,25 @@ int main(int argc, char* argv[]) {
 		size_t itype = get_instruction_type(ops.first_byte);
 
 		switch (itype) {
-		case reg2reg: decode_reg2reg(outfile, &ops, &n);
+		case reg2reg: decode_reg2reg(outfile, &ops, &n); break;
+		case imm2reg: 
+		{
+			Instruction inst = {
+				.w = (ops.first_byte >> 3) & 1,
+				.reg = ops.first_byte & 0b111
+			};
+
+			if (inst.w) {
+				u8 third_byte = *ops.buffer++;
+				inst.data = (third_byte << 8 | ops.second_byte);
+			}
+			else
+				inst.data = ops.second_byte;
+
+			const char* const dst_reg = registers[inst.w][inst.reg];
+
+			fprintf(outfile, "%s, %d\n", dst_reg, inst.data);
+		} break;
 		}
 	}
 }
