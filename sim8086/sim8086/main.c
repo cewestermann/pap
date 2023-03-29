@@ -30,16 +30,6 @@ const char* eac[N_ENCODING_FIELDS] = {
 	"bx",
 };
 
-typedef struct InstructionByte {
-	u8 byte;
-	size_t length; // Bit sequence length
-} InstructionByte;
-
-struct File {
-	size_t size;
-	void* contents; // Void pointer (A generic pointer that does not need an explicit type)
-};
-
 typedef enum {
 	reg2reg,
 	imm2mem,
@@ -62,6 +52,11 @@ const char* instruction_type_strings[] = {
 	"type_count"
 };
 
+typedef struct InstructionByte {
+	u8 byte;
+	size_t length; // Bit sequence length
+} InstructionByte;
+
 InstructionByte instructions[type_count] = {
 	// {bit_sequence, number_of_bits}
 	[reg2reg] = {0b100010, 6},
@@ -71,6 +66,11 @@ InstructionByte instructions[type_count] = {
 	[acc2mem] = {0b1010001, 7},
 	[reg2seg] = {0b10001110, 8},
 	[seg2reg] = {0b10001100, 8}
+};
+
+struct File {
+	size_t size;
+	void* contents; // Void pointer (A generic pointer that does not need an explicit type)
 };
 
 typedef struct Instruction {
@@ -87,11 +87,11 @@ typedef struct Instruction {
 	i32 data;
 } Instruction;
 
-typedef struct Ops {
+typedef struct Opcodes {
 	u8 first_byte;
 	u8 second_byte;
 	u8* buffer;
-} Ops;
+} Opcodes;
 
 static struct File read_entire_file(char* filename);
 static void free_entire_file(struct File* file);
@@ -102,17 +102,18 @@ static u8 get_r_m_encoding(u8 second_byte);
 static void write_mod11_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
 static void write_eac_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
 static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data);
-static void decode_reg2reg(FILE* outfile, Ops* ops, size_t* n);
+static void decode_reg2reg(FILE* outfile, Opcodes* ops, size_t* n);
 
 int main(int argc, char* argv[]) {
 	FILE* outfile = fopen("bleb.asm", "w");
 
 	struct File file = read_entire_file("sim8086\\encodings\\listing_0039_more_movs");
+	fprintf(outfile, "bits 16\n\n");
 	// Implicitly cast void pointer to char pointer.
 	u8* buffer = file.contents;
 
 	for (size_t n = 0; n < file.size; n += 2) {
-		Ops ops = {
+		Opcodes ops = {
 			.first_byte = *buffer++,
 			.second_byte = *buffer++,
 			.buffer = buffer
@@ -131,6 +132,7 @@ int main(int argc, char* argv[]) {
 
 			if (inst.w) {
 				u8 third_byte = *ops.buffer++;
+				n++;
 				inst.data = (third_byte << 8 | ops.second_byte);
 			}
 			else
@@ -138,13 +140,13 @@ int main(int argc, char* argv[]) {
 
 			const char* const dst_reg = registers[inst.w][inst.reg];
 
-			fprintf(outfile, "%s, %d\n", dst_reg, inst.data);
+			fprintf(outfile, "mov %s, %d\n", dst_reg, inst.data);
 		} break;
 		}
 	}
 }
 
-static void decode_reg2reg(FILE* outfile, Ops* ops, size_t* n) {
+static void decode_reg2reg(FILE* outfile, Opcodes* ops, size_t* n) {
 	Instruction inst = {
 		.d = ((ops->first_byte >> 1) & 1),
 		.w = ops->first_byte & 1,
