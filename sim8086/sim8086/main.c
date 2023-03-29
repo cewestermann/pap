@@ -101,6 +101,7 @@ static u8 get_r_m_encoding(u8 second_byte);
 static void write_mod11_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
 static void write_eac_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
 static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data);
+static void write_source_address_calculation(FILE* outfile, char const* const reg_field, char const* const address);
 static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8* buffer, size_t* n);
 static void decode_imm2reg(FILE* outfile, Opcodes* ops, u8* buffer, size_t* n);
 
@@ -124,6 +125,7 @@ int main(int argc, char* argv[]) {
 		case reg2reg: decode_reg2reg(outfile, &ops, buffer, &n); break;
 		case imm2reg: 
 		{
+			// TODO: Move this into a function, but note that it breaks as first_byte equals 0 after 6 iterations
 			Instruction inst = {
 			.w = (ops.first_byte >> 3) & 1,
 			.reg = ops.first_byte & 0b111
@@ -180,7 +182,8 @@ static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8* buffer, size_t* n) {
 
 	switch (inst.mod) {
 	case 0b11: write_mod11_to_file(outfile, inst.d, reg_field, r_m_field); break;
-	case 0b00: write_eac_to_file(outfile, inst.d, reg_field, r_m_field); break;
+	//case 0b00: write_eac_to_file(outfile, inst.d, reg_field, r_m_field); break;
+	case 0b00: write_source_address_calculation(outfile, reg_field, eac[inst.r_m]); break;
 	case 0b01:
 	{
 		inst.disp_lo = *buffer++;
@@ -214,6 +217,10 @@ static void write_eac_to_file(FILE* outfile, u8 d, char const* const reg_field, 
 		fprintf(outfile, "mov %s, [%s]\n", reg_field, r_m_field);
 	else
 		fprintf(outfile, "mov [%s], %s\n", r_m_field, reg_field);
+}
+
+static void write_source_address_calculation(FILE* outfile, char const* const reg_field, char const* const address) {
+	fprintf(outfile, "mov %s, [%s]\n", reg_field, address);
 }
 
 static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data) {
