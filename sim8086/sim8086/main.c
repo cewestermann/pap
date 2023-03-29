@@ -118,6 +118,7 @@ int main(int argc, char* argv[]) {
 			.second_byte = *buffer++,
 			.buffer = buffer
 		};
+		// TODO: Currently, first_byte becomes 0 after 6 iterations. Why?
 
 		size_t itype = get_instruction_type(ops.first_byte);
 
@@ -142,8 +143,10 @@ int main(int argc, char* argv[]) {
 
 			fprintf(outfile, "mov %s, %d\n", dst_reg, inst.data);
 		} break;
+		default: printf("No such itype: %zu\n", itype); exit(EXIT_FAILURE);
 		}
 	}
+	return EXIT_SUCCESS;
 }
 
 static void decode_reg2reg(FILE* outfile, Opcodes* ops, size_t* n) {
@@ -218,18 +221,15 @@ static size_t get_instruction_type(u8 first_byte) {
 
 	for (i = 0; i < type_count; i++) {
 		size_t diff = 8 - instructions[i].length;
+
 		if ((first_byte >> diff) == instructions[i].byte) {
 			declare_match(i);
-			break;
+			return i;
 		}
 	}
 
-	if (i == type_count) {
-		printf("Exceeded number of types. No matching type found.\n");
-		exit(EXIT_FAILURE);
-	}
-
-	return i;
+	printf("Exceeded number of types. No matching type found.\n");
+	exit(EXIT_FAILURE);
 }
 
 static void declare_match(size_t idx) {
