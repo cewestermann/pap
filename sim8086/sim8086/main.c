@@ -172,7 +172,7 @@ static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_fi
 
 static u8 get_mod_encoding(u8 second_byte) {
 	// The mod bits do not seem to change position, so we can
-	// use a function for this.
+	// use a function for this..
 	return ((second_byte >> 6) & 0b11);
 }
 
