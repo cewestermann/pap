@@ -26,7 +26,7 @@ const char* eac[N_ENCODING_FIELDS] = {
 	"bp + di",
 	"si",
 	"di",
-	"direct adress",
+	"bp", // Direct address
 	"bx",
 };
 
@@ -98,9 +98,10 @@ static void declare_match(size_t idx);
 static size_t get_instruction_type(u8 first_byte);
 static u8 get_mod_encoding(u8 second_byte);
 static u8 get_r_m_encoding(u8 second_byte);
+static i32 displacement_16bit(u8* buffer);
 static void write_mod11_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
 static void write_eac_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
-static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data);
+static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data, u8 r_m);
 static void write_source_address_calculation(FILE* outfile, char const* const reg_field, char const* const address);
 static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8* buffer, size_t* n);
 static void decode_imm2reg(FILE* outfile, Opcodes* ops, u8* buffer, size_t* n);
@@ -130,6 +131,7 @@ int main(int argc, char* argv[]) {
 			.w = (ops.first_byte >> 3) & 1,
 			.reg = ops.first_byte & 0b111
 			};
+
 
 			if (inst.w) {
 				u8 third_byte = *buffer++;
@@ -182,27 +184,42 @@ static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8* buffer, size_t* n) {
 
 	switch (inst.mod) {
 	case 0b11: write_mod11_to_file(outfile, inst.d, reg_field, r_m_field); break;
-	//case 0b00: write_eac_to_file(outfile, inst.d, reg_field, r_m_field); break;
-	case 0b00: write_source_address_calculation(outfile, reg_field, eac[inst.r_m]); break;
+	case 0b00: 
+	{
+		if (inst.r_m == 0b110) {
+			// Get 16 bit displacement
+			inst.data = displacement_16bit(buffer);
+			(*n) += 2;
+			write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data, inst.r_m);
+			break;
+		} 
+		write_source_address_calculation(outfile, reg_field, eac[inst.r_m]); break;
+	}
 	case 0b01:
 	{
 		inst.disp_lo = *buffer++;
 		inst.data = inst.disp_lo;
 		(*n)++;
-		write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data);
+		write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data, inst.r_m);
 	} break;
 	case 0b10:
 	{
-		inst.disp_lo = *buffer++;
-		inst.disp_hi = *buffer++;
-		inst.data = (inst.disp_hi << 8 | inst.disp_lo);
+		inst.data = displacement_16bit(buffer);
 		(*n) += 2;
-		write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data);
+		write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data, inst.r_m);
 	} break;
 	default:
 		printf("ERROR: No such MOD number: %d", inst.mod);
 		exit(EXIT_FAILURE);
 	}
+}
+
+static i32 displacement_16bit(u8* buffer) {
+	u8 disp_lo = *buffer++;
+	u8 disp_hi = *buffer++;
+
+	i32 result = (disp_hi << 8 | disp_lo);
+	return result;
 }
 
 static void write_mod11_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field) {
@@ -223,8 +240,8 @@ static void write_source_address_calculation(FILE* outfile, char const* const re
 	fprintf(outfile, "mov %s, [%s]\n", reg_field, address);
 }
 
-static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data) {
-	fprintf(outfile, "mov %s, %d\n", reg_field, data);
+static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data, u8 r_m) {
+	fprintf(outfile, "mov %s, [%s + %d]\n", reg_field, eac[r_m], data);
 }
 
 
@@ -244,8 +261,8 @@ static size_t get_instruction_type(u8 first_byte) {
 	size_t i;
 
 	for (i = 0; i < type_count; i++) {
-		size_t diff = 8 - instructions[i].length;
 
+		size_t diff = 8 - instructions[i].length;
 		if ((first_byte >> diff) == instructions[i].byte) {
 			declare_match(i);
 			return i;
