@@ -98,13 +98,13 @@ static void declare_match(size_t idx);
 static size_t get_instruction_type(u8 first_byte);
 static u8 get_mod_encoding(u8 second_byte);
 static u8 get_r_m_encoding(u8 second_byte);
-static i32 displacement_16bit(u8* buffer);
+static i32 displacement_16bit(u8** buffer);
 static void write_mod11_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
 static void write_eac_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
 static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data, u8 r_m);
 static void write_source_address_calculation(FILE* outfile, char const* const reg_field, char const* const address);
-static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8* buffer, size_t* n);
-static void decode_imm2reg(FILE* outfile, Opcodes* ops, u8* buffer, size_t* n);
+static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
+static void decode_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
 
 int main(int argc, char* argv[]) {
 	FILE* outfile = fopen("bleb.asm", "w");
@@ -115,50 +115,36 @@ int main(int argc, char* argv[]) {
 	u8* buffer = file.contents;
 
 	for (size_t n = 0; n < file.size; n += 2) {
+
+		u8 first_byte = *buffer++;
+		u8 second_byte = *buffer++;
+
 		Opcodes ops = {
-			.first_byte = *buffer++,
-			.second_byte = *buffer++,
+			.first_byte = first_byte,
+			.second_byte = second_byte
 		};
 
 		size_t itype = get_instruction_type(ops.first_byte);
 
 		switch (itype) {
-		case reg2reg: decode_reg2reg(outfile, &ops, buffer, &n); break;
-		case imm2reg: 
-		{
-			// TODO: Move this into a function, but note that it breaks as first_byte equals 0 after 6 iterations
-			Instruction inst = {
-			.w = (ops.first_byte >> 3) & 1,
-			.reg = ops.first_byte & 0b111
-			};
-
-
-			if (inst.w) {
-				u8 third_byte = *buffer++;
-				n++;
-				inst.data = (third_byte << 8 | ops.second_byte);
-			}
-			else
-				inst.data = ops.second_byte;
-
-			const char* const dst_reg = registers[inst.w][inst.reg];
-
-			fprintf(outfile, "mov %s, %d\n", dst_reg, inst.data);
-		} break;
-		default: printf("No such itype: %zu\n", itype);          exit(EXIT_FAILURE);
+		case reg2reg: decode_reg2reg(outfile, &ops, &buffer, &n); break;
+		case imm2reg: decode_imm2reg(outfile, &ops, &buffer, &n); break;
+		default: printf("No such itype: %zu\n", itype);
+				 exit(EXIT_FAILURE);
 		}
 	}
 	return EXIT_SUCCESS;
 }
 
-static void decode_imm2reg(FILE* outfile, Opcodes* ops, u8* buffer, size_t* n) {
+static void decode_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) {
 	Instruction inst = {
 	.w = (ops->first_byte >> 3) & 1,
 	.reg = ops->first_byte & 0b111
 	};
 
 	if (inst.w) {
-		u8 third_byte = *buffer++;
+		u8 third_byte = **buffer;
+		(*buffer)++;
 		(*n)++;
 		inst.data = (third_byte << 8 | ops->second_byte);
 	}
@@ -170,7 +156,7 @@ static void decode_imm2reg(FILE* outfile, Opcodes* ops, u8* buffer, size_t* n) {
 	fprintf(outfile, "mov %s, %d\n", dst_reg, inst.data);
 }
 
-static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8* buffer, size_t* n) {
+static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) {
 	Instruction inst = {
 		.d = ((ops->first_byte >> 1) & 1),
 		.w = ops->first_byte & 1,
@@ -197,27 +183,33 @@ static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8* buffer, size_t* n) {
 	}
 	case 0b01:
 	{
-		inst.disp_lo = *buffer++;
+		inst.disp_lo = **buffer;
+		(*buffer)++;
 		inst.data = inst.disp_lo;
 		(*n)++;
+
 		write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data, inst.r_m);
-	} break;
+		break;
+	} 
 	case 0b10:
 	{
 		inst.data = displacement_16bit(buffer);
 		(*n) += 2;
 		write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data, inst.r_m);
-	} break;
+		break;
+	} 
 	default:
+
 		printf("ERROR: No such MOD number: %d", inst.mod);
 		exit(EXIT_FAILURE);
 	}
 }
 
-static i32 displacement_16bit(u8* buffer) {
-	u8 disp_lo = *buffer++;
-	u8 disp_hi = *buffer++;
-
+static i32 displacement_16bit(u8** buffer) {
+	u8 disp_lo = **buffer;
+	(*buffer)++;
+	u8 disp_hi = **buffer;
+	(*buffer)++;
 	i32 result = (disp_hi << 8 | disp_lo);
 	return result;
 }
