@@ -102,7 +102,7 @@ static i32 displacement_16bit(u8** buffer);
 static void write_mod11_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
 static void write_eac_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
 static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data, u8 r_m);
-static void write_source_address_calculation(FILE* outfile, char const* const reg_field, char const* const address);
+static void write_source_address_calculation(FILE* outfile, u8 d, char const* const reg_field, char const* const address);
 static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
 static void decode_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
 
@@ -179,7 +179,7 @@ static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) 
 			write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data, inst.r_m);
 			break;
 		} 
-		write_source_address_calculation(outfile, reg_field, eac[inst.r_m]); break;
+		write_source_address_calculation(outfile, inst.d, reg_field, eac[inst.r_m]); break;
 	}
 	case 0b01:
 	{
@@ -228,12 +228,24 @@ static void write_eac_to_file(FILE* outfile, u8 d, char const* const reg_field, 
 		fprintf(outfile, "mov [%s], %s\n", r_m_field, reg_field);
 }
 
-static void write_source_address_calculation(FILE* outfile, char const* const reg_field, char const* const address) {
-	fprintf(outfile, "mov %s, [%s]\n", reg_field, address);
+static void write_source_address_calculation(FILE* outfile, u8 d, char const* const reg_field, char const* const address) {
+	if (d)
+		fprintf(outfile, "mov %s, [%s]\n", reg_field, address);
+	else
+		fprintf(outfile, "mov [%s], %s\n", address, reg_field);
 }
 
 static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data, u8 r_m) {
-	fprintf(outfile, "mov %s, [%s + %d]\n", reg_field, eac[r_m], data);
+	if (d == 1)
+		if (data) // If data is nonzero
+			fprintf(outfile, "mov %s, [%s + %d]\n", reg_field, eac[r_m], data);
+		else // Otherwise don't write the zero
+			fprintf(outfile, "mov %s, [%s]\n", reg_field, eac[r_m]);
+	else
+		if (data)
+			fprintf(outfile, "mov [%s + %d], %s\n", eac[r_m], data, reg_field);
+		else
+			fprintf(outfile, "mov [%s], %s\n", eac[r_m], reg_field);
 }
 
 
