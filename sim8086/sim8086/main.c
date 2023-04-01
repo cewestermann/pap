@@ -38,6 +38,9 @@ typedef enum {
 	acc2mem,
 	reg2seg,
 	seg2reg,
+	add_reg2either,
+	add_imm2reg,
+	add_imm2acc,
 	type_count
 } instruction_type;
 
@@ -49,6 +52,9 @@ const char* instruction_type_strings[] = {
 	"acc2mem",
 	"reg2seg",
 	"seg2reg",
+	"add_reg2either",
+	"add_imm2reg",
+	"add_imm2acc",
 	"type_count"
 };
 
@@ -58,6 +64,7 @@ typedef struct InstructionByte {
 } InstructionByte;
 
 InstructionByte instructions[type_count] = {
+	// MOV
 	// {bit_sequence, number_of_bits}
 	[reg2reg] = {0b100010, 6},
 	[imm2mem] = {0b1100011, 7},
@@ -65,7 +72,12 @@ InstructionByte instructions[type_count] = {
 	[mem2acc] = {0b1010000, 7},
 	[acc2mem] = {0b1010001, 7},
 	[reg2seg] = {0b10001110, 8},
-	[seg2reg] = {0b10001100, 8}
+	[seg2reg] = {0b10001100, 8},
+
+	// ADD
+	[add_reg2either] = {0b000000, 6},
+	[add_imm2reg] = {0b100000, 6},
+	[add_imm2acc] = {0b0000010, 7}
 };
 
 struct File {
@@ -99,17 +111,17 @@ static size_t get_instruction_type(u8 first_byte);
 static u8 get_mod_encoding(u8 second_byte);
 static u8 get_r_m_encoding(u8 second_byte);
 static i32 displacement_16bit(u8** buffer);
-static void write_mod11_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
-static void write_eac_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
-static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data, u8 r_m);
-static void write_source_address_calculation(FILE* outfile, u8 d, char const* const reg_field, char const* const address);
-static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
-static void decode_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
+static void write_mod11_to_file(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
+static void write_eac_to_file(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
+static void write_eac_to_file_disp(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, i32 data, u8 r_m);
+static void write_source_address_calculation(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, char const* const address);
+static void decode_reg2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
+static void decode_imm2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
 
 int main(int argc, char* argv[]) {
 	FILE* outfile = fopen("bleb.asm", "w");
 
-	struct File file = read_entire_file("sim8086\\encodings\\listing_0039_more_movs");
+	struct File file = read_entire_file("sim8086\\encodings\\listing_0041_add_sub_cmp_jnz");
 	fprintf(outfile, "bits 16\n\n");
 	// Implicitly cast void pointer to char pointer.
 	u8* buffer = file.contents;
@@ -127,8 +139,9 @@ int main(int argc, char* argv[]) {
 		size_t itype = get_instruction_type(ops.first_byte);
 
 		switch (itype) {
-		case reg2reg: decode_reg2reg(outfile, &ops, &buffer, &n); break;
-		case imm2reg: decode_imm2reg(outfile, &ops, &buffer, &n); break;
+		case reg2reg: decode_reg2reg("mov", outfile, &ops, &buffer, &n); break;
+		case imm2reg: decode_imm2reg("mov", outfile, &ops, &buffer, &n); break;
+		case add_reg2either: decode_reg2reg("add", outfile, &ops, &buffer, &n); break;
 		default: printf("No such itype: %zu\n", itype);
 				 exit(EXIT_FAILURE);
 		}
@@ -136,7 +149,7 @@ int main(int argc, char* argv[]) {
 	return EXIT_SUCCESS;
 }
 
-static void decode_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) {
+static void decode_imm2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) {
 	Instruction inst = {
 	.w = (ops->first_byte >> 3) & 1,
 	.reg = ops->first_byte & 0b111
@@ -153,10 +166,10 @@ static void decode_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) 
 
 	const char* const dst_reg = registers[inst.w][inst.reg];
 
-	fprintf(outfile, "mov %s, %d\n", dst_reg, inst.data);
+	fprintf(outfile, "%s %s, %d\n", inst_type, dst_reg, inst.data);
 }
 
-static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) {
+static void decode_reg2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) {
 	Instruction inst = {
 		.d = ((ops->first_byte >> 1) & 1),
 		.w = ops->first_byte & 1,
@@ -169,17 +182,17 @@ static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) 
 	char const* const r_m_field = registers[inst.w][inst.r_m];
 
 	switch (inst.mod) {
-	case 0b11: write_mod11_to_file(outfile, inst.d, reg_field, r_m_field); break;
+	case 0b11: write_mod11_to_file(inst_type, outfile, inst.d, reg_field, r_m_field); break;
 	case 0b00: 
 	{
 		if (inst.r_m == 0b110) {
 			// Get 16 bit displacement
 			inst.data = displacement_16bit(buffer);
 			(*n) += 2;
-			write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data, inst.r_m);
+			write_eac_to_file_disp(inst_type, outfile, inst.d, reg_field, inst.data, inst.r_m);
 			break;
 		} 
-		write_source_address_calculation(outfile, inst.d, reg_field, eac[inst.r_m]); break;
+		write_source_address_calculation(inst_type, outfile, inst.d, reg_field, eac[inst.r_m]); break;
 	}
 	case 0b01:
 	{
@@ -188,14 +201,14 @@ static void decode_reg2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) 
 		inst.data = inst.disp_lo;
 		(*n)++;
 
-		write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data, inst.r_m);
+		write_eac_to_file_disp(inst_type, outfile, inst.d, reg_field, inst.data, inst.r_m);
 		break;
 	} 
 	case 0b10:
 	{
 		inst.data = displacement_16bit(buffer);
 		(*n) += 2;
-		write_eac_to_file_disp(outfile, inst.d, reg_field, inst.data, inst.r_m);
+		write_eac_to_file_disp(inst_type, outfile, inst.d, reg_field, inst.data, inst.r_m);
 		break;
 	} 
 	default:
@@ -214,38 +227,38 @@ static i32 displacement_16bit(u8** buffer) {
 	return result;
 }
 
-static void write_mod11_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field) {
+static void write_mod11_to_file(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field) {
 	if (d) // reg_field is the destination
-		fprintf(outfile, "mov %s, %s\n", reg_field, r_m_field);
+		fprintf(outfile, "%s %s, %s\n", inst_type, reg_field, r_m_field);
 	else // reg_field is the source
-		fprintf(outfile, "mov %s, %s\n", r_m_field, reg_field);
+		fprintf(outfile, "%s %s, %s\n", inst_type, r_m_field, reg_field);
 }
 
-static void write_eac_to_file(FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field) {
+static void write_eac_to_file(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field) {
 	if (d)
-		fprintf(outfile, "mov %s, [%s]\n", reg_field, r_m_field);
+		fprintf(outfile, "%s %s, [%s]\n", inst_type, reg_field, r_m_field);
 	else
-		fprintf(outfile, "mov [%s], %s\n", r_m_field, reg_field);
+		fprintf(outfile, "%s [%s], %s\n", inst_type, r_m_field, reg_field);
 }
 
-static void write_source_address_calculation(FILE* outfile, u8 d, char const* const reg_field, char const* const address) {
+static void write_source_address_calculation(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, char const* const address) {
 	if (d)
-		fprintf(outfile, "mov %s, [%s]\n", reg_field, address);
+		fprintf(outfile, "%s %s, [%s]\n", inst_type, reg_field, address);
 	else
-		fprintf(outfile, "mov [%s], %s\n", address, reg_field);
+		fprintf(outfile, "%s [%s], %s\n", inst_type, address, reg_field);
 }
 
-static void write_eac_to_file_disp(FILE* outfile, u8 d, char const* const reg_field, i32 data, u8 r_m) {
+static void write_eac_to_file_disp(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, i32 data, u8 r_m) {
 	if (d == 1)
 		if (data) // If data is nonzero
-			fprintf(outfile, "mov %s, [%s + %d]\n", reg_field, eac[r_m], data);
+			fprintf(outfile, "%s %s, [%s + %d]\n", inst_type, reg_field, eac[r_m], data);
 		else // Otherwise don't write the zero
-			fprintf(outfile, "mov %s, [%s]\n", reg_field, eac[r_m]);
+			fprintf(outfile, "%s %s, [%s]\n", inst_type, reg_field, eac[r_m]);
 	else
 		if (data)
-			fprintf(outfile, "mov [%s + %d], %s\n", eac[r_m], data, reg_field);
+			fprintf(outfile, "%s [%s + %d], %s\n", inst_type, eac[r_m], data, reg_field);
 		else
-			fprintf(outfile, "mov [%s], %s\n", eac[r_m], reg_field);
+			fprintf(outfile, "%s [%s], %s\n", inst_type, eac[r_m], reg_field);
 }
 
 
