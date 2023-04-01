@@ -112,9 +112,7 @@ static u8 get_mod_encoding(u8 second_byte);
 static u8 get_r_m_encoding(u8 second_byte);
 static i32 displacement_16bit(u8** buffer);
 static void write_mod11_to_file(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
-static void write_eac_to_file(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
-static void write_eac_to_file_disp(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, i32 data, u8 r_m);
-static void write_source_address_calculation(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, char const* const address);
+static void write_eac_to_file(char const* const inst_type, FILE* outfile, Instruction* inst, char const* const reg_field);
 static void decode_reg2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
 static void decode_imm2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
 
@@ -142,6 +140,7 @@ int main(int argc, char* argv[]) {
 		case reg2reg: decode_reg2reg("mov", outfile, &ops, &buffer, &n); break;
 		case imm2reg: decode_imm2reg("mov", outfile, &ops, &buffer, &n); break;
 		case add_reg2either: decode_reg2reg("add", outfile, &ops, &buffer, &n); break;
+		case add_imm2reg: decode_add_imm2reg(); // TODO: Implement
 		default: printf("No such itype: %zu\n", itype);
 				 exit(EXIT_FAILURE);
 		}
@@ -189,10 +188,8 @@ static void decode_reg2reg(char const* const inst_type, FILE* outfile, Opcodes* 
 			// Get 16 bit displacement
 			inst.data = displacement_16bit(buffer);
 			(*n) += 2;
-			write_eac_to_file_disp(inst_type, outfile, inst.d, reg_field, inst.data, inst.r_m);
-			break;
 		} 
-		write_source_address_calculation(inst_type, outfile, inst.d, reg_field, eac[inst.r_m]); break;
+		write_eac_to_file(inst_type, outfile, &inst, reg_field); break;
 	}
 	case 0b01:
 	{
@@ -201,14 +198,15 @@ static void decode_reg2reg(char const* const inst_type, FILE* outfile, Opcodes* 
 		inst.data = inst.disp_lo;
 		(*n)++;
 
-		write_eac_to_file_disp(inst_type, outfile, inst.d, reg_field, inst.data, inst.r_m);
+		write_eac_to_file(inst_type, outfile, &inst, reg_field);
 		break;
 	} 
 	case 0b10:
 	{
 		inst.data = displacement_16bit(buffer);
 		(*n) += 2;
-		write_eac_to_file_disp(inst_type, outfile, inst.d, reg_field, inst.data, inst.r_m);
+		write_eac_to_file(inst_type, outfile, &inst, reg_field);
+
 		break;
 	} 
 	default:
@@ -234,33 +232,24 @@ static void write_mod11_to_file(char const* const inst_type, FILE* outfile, u8 d
 		fprintf(outfile, "%s %s, %s\n", inst_type, r_m_field, reg_field);
 }
 
-static void write_eac_to_file(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field) {
-	if (d)
-		fprintf(outfile, "%s %s, [%s]\n", inst_type, reg_field, r_m_field);
-	else
-		fprintf(outfile, "%s [%s], %s\n", inst_type, r_m_field, reg_field);
+static void write_eac_to_file(char const* const inst_type, FILE* outfile, Instruction* inst, char const* const reg_field) {
+	if (inst->d) {
+		if (inst->data) {
+			fprintf(outfile, "%s %s, [%s + %d]\n", inst_type, reg_field, eac[inst->r_m], inst->data);
+		}
+		else {
+			fprintf(outfile, "%s %s, [%s]\n", inst_type, reg_field, eac[inst->r_m]);
+		}
+	}
+	else {
+		if (inst->data) {
+			fprintf(outfile, "%s [%s + %d], %s\n", inst_type, eac[inst->r_m], inst->data, reg_field);
+		}
+		else {
+			fprintf(outfile, "%s [%s], %s\n", inst_type, eac[inst->r_m], reg_field);
+		}
+	}
 }
-
-static void write_source_address_calculation(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, char const* const address) {
-	if (d)
-		fprintf(outfile, "%s %s, [%s]\n", inst_type, reg_field, address);
-	else
-		fprintf(outfile, "%s [%s], %s\n", inst_type, address, reg_field);
-}
-
-static void write_eac_to_file_disp(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, i32 data, u8 r_m) {
-	if (d == 1)
-		if (data) // If data is nonzero
-			fprintf(outfile, "%s %s, [%s + %d]\n", inst_type, reg_field, eac[r_m], data);
-		else // Otherwise don't write the zero
-			fprintf(outfile, "%s %s, [%s]\n", inst_type, reg_field, eac[r_m]);
-	else
-		if (data)
-			fprintf(outfile, "%s [%s + %d], %s\n", inst_type, eac[r_m], data, reg_field);
-		else
-			fprintf(outfile, "%s [%s], %s\n", inst_type, eac[r_m], reg_field);
-}
-
 
 static u8 get_mod_encoding(u8 second_byte) {
 	// The mod bits do not seem to change position, so we can
