@@ -158,7 +158,7 @@ static void decode_add_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t*
 		.mod = get_mod_encoding(ops->second_byte),
 		.r_m = get_r_m_encoding(ops->second_byte)
 	};
-
+	int x = 5;
 	switch (inst.mod) {
 	case 0b11:
 	{
