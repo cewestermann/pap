@@ -139,10 +139,11 @@ int main(int argc, char* argv[]) {
 		size_t itype = get_instruction_type(ops.first_byte);
 
 		switch (itype) {
+
 		case reg2reg: decode_reg2reg("mov", outfile, &ops, &buffer, &n); break;
 		case imm2reg: decode_imm2reg("mov", outfile, &ops, &buffer, &n); break;
 		case add_reg2either: decode_reg2reg("add", outfile, &ops, &buffer, &n); break;
-		case add_imm2reg: decode_add_imm2reg(); // TODO: Implement
+		case add_imm2reg: decode_add_imm2reg(outfile, &ops, &buffer, &n); break;
 		default: printf("No such itype: %zu\n", itype);
 				 exit(EXIT_FAILURE);
 		}
@@ -157,6 +158,24 @@ static void decode_add_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t*
 		.mod = get_mod_encoding(ops->second_byte),
 		.r_m = get_r_m_encoding(ops->second_byte)
 	};
+
+	switch (inst.mod) {
+	case 0b11:
+	{
+		u8 data = **buffer;
+		(*buffer)++;
+		(*n)++;
+		if (inst.w) {
+			u8 ext = **buffer;
+			(*buffer)++;
+			(*n)++;
+			data = (ext << 8 | data);
+		}
+		fprintf(outfile, "add %s, %d\n", registers[inst.w][inst.r_m], data);
+		break;
+	}
+	}
+
 }
 
 static void decode_imm2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) {
