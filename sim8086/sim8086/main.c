@@ -87,6 +87,7 @@ struct File {
 
 typedef struct Instruction {
 	u8 d;
+	u8 s;
 	u8 w;
 	u8 mod;
 	u8 reg;
@@ -115,6 +116,7 @@ static void write_mod11_to_file(char const* const inst_type, FILE* outfile, u8 d
 static void write_eac_to_file(char const* const inst_type, FILE* outfile, Instruction* inst, char const* const reg_field);
 static void decode_reg2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
 static void decode_imm2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
+static void decode_add_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
 
 int main(int argc, char* argv[]) {
 	FILE* outfile = fopen("bleb.asm", "w");
@@ -146,6 +148,15 @@ int main(int argc, char* argv[]) {
 		}
 	}
 	return EXIT_SUCCESS;
+}
+
+static void decode_add_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) {
+	Instruction inst = {
+		.s = (ops->first_byte >> 1) & 1,
+		.w = ops->first_byte & 1,
+		.mod = get_mod_encoding(ops->second_byte),
+		.r_m = get_r_m_encoding(ops->second_byte)
+	};
 }
 
 static void decode_imm2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) {
