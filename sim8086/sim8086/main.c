@@ -156,7 +156,7 @@ static void decode_add_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t*
 		.s = (ops->first_byte >> 1) & 1,
 		.w = ops->first_byte & 1,
 		.mod = get_mod_encoding(ops->second_byte),
-		.r_m = get_r_m_encoding(ops->second_byte)
+		.r_m = get_r_m_encoding(ops->second_byte),
 	};
 
 	switch (inst.mod) {
@@ -165,12 +165,14 @@ static void decode_add_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t*
 		u8 data = **buffer;
 		(*buffer)++;
 		(*n)++;
-		if (inst.w) {
+		if (inst.w && !inst.s) {
 			u8 ext = **buffer;
 			(*buffer)++;
 			(*n)++;
 			data = (ext << 8 | data);
 		}
+		else
+			data = (data << 8 | data);
 		fprintf(outfile, "add %s, %d\n", registers[inst.w][inst.r_m], data);
 		break;
 	}
