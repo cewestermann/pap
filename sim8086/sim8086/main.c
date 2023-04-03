@@ -114,6 +114,7 @@ static u8 get_r_m_encoding(u8 second_byte);
 static i32 displacement_16bit(u8** buffer);
 static void write_mod11_to_file(char const* const inst_type, FILE* outfile, u8 d, char const* const reg_field, char const* const r_m_field);
 static void write_eac_to_file(char const* const inst_type, FILE* outfile, Instruction* inst, char const* const reg_field);
+static void write_data_to_file(char const* const inst_type, FILE* outfile, Instruction* inst, i32 displacement);
 static void decode_reg2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
 static void decode_imm2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
 static void decode_add_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
@@ -172,12 +173,54 @@ static void decode_add_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t*
 			data = (ext << 8 | data);
 		}
 		else
-			data = (data << 8 | data);
+			data = (data << 8 | data); // Sign extend to 16 bits
 		fprintf(outfile, "add %s, %d\n", registers[inst.w][inst.r_m], data);
 		break;
 	}
-	}
+	case 0b00:
+	{
+		inst.data = **buffer;
+		(*buffer)++;
+		(*n)++;
 
+		if (inst.w)
+			write_data_to_file("add word", outfile, &inst, 0);
+		else
+			write_data_to_file("add byte", outfile, &inst, 0);
+		break;
+	}
+	case 0b01:
+	{
+		inst.disp_lo = **buffer;
+		(*buffer)++;
+		(*n)++;
+		inst.data = **buffer;
+		(*buffer)++;
+		(*n)++;
+		if (inst.w)
+			write_data_to_file("add word", outfile, &inst, (i32)inst.disp_lo);
+		else
+			write_data_to_file("add byte", outfile, &inst, (i32)inst.disp_lo);
+	}
+	case 0b10:
+	{
+		// Refactor. This is terrible.
+		inst.disp_lo = **buffer;
+		(*buffer)++;
+		(*n)++;
+		inst.disp_hi = **buffer;
+		(*buffer)++;
+		(*n)++;
+		i32 displacement = (inst.disp_hi << 8 | inst.disp_lo);
+		inst.data = **buffer;
+		(*buffer)++;
+		(*n)++;
+		if (inst.w)
+			write_data_to_file("add word", outfile, &inst, displacement);
+		else
+			write_data_to_file("add byte", outfile, &inst, displacement);
+	}
+	}
 }
 
 static void decode_imm2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) {
@@ -262,6 +305,13 @@ static void write_mod11_to_file(char const* const inst_type, FILE* outfile, u8 d
 		fprintf(outfile, "%s %s, %s\n", inst_type, reg_field, r_m_field);
 	else // reg_field is the source
 		fprintf(outfile, "%s %s, %s\n", inst_type, r_m_field, reg_field);
+}
+
+static void write_data_to_file(char const* const inst_type, FILE* outfile, Instruction* inst, i32 displacement) {
+	if (displacement)
+		fprintf(outfile, "%s [%s + %d], %d\n", inst_type, eac[inst->r_m], displacement, inst->data);
+	else
+		fprintf(outfile, "%s [%s], %d\n", inst_type, eac[inst->r_m], inst->data);
 }
 
 static void write_eac_to_file(char const* const inst_type, FILE* outfile, Instruction* inst, char const* const reg_field) {
