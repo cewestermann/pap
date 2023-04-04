@@ -117,6 +117,7 @@ static void write_eac_to_file(char const* const inst_type, FILE* outfile, Instru
 static void write_data_to_file(char const* const inst_type, FILE* outfile, Instruction* inst, i32 displacement);
 static void decode_reg2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
 static void decode_imm2reg(char const* const inst_type, FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
+static void decode_add_imm2acc(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
 static void decode_add_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n);
 
 int main(int argc, char* argv[]) {
@@ -145,11 +146,31 @@ int main(int argc, char* argv[]) {
 		case imm2reg: decode_imm2reg("mov", outfile, &ops, &buffer, &n); break;
 		case add_reg2either: decode_reg2reg("add", outfile, &ops, &buffer, &n); break;
 		case add_imm2reg: decode_add_imm2reg(outfile, &ops, &buffer, &n); break;
+		case add_imm2acc: decode_add_imm2acc(outfile, &ops, &buffer, &n); break;
 		default: printf("No such itype: %zu\n", itype);
 				 exit(EXIT_FAILURE);
 		}
 	}
 	return EXIT_SUCCESS;
+}
+
+static void decode_add_imm2acc(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) {
+	Instruction inst = {
+		.w = ops->first_byte & 1
+	};
+	i32 data = **buffer;
+	
+	(*buffer)++;
+	(*n)++;
+
+	if (inst.w) {
+		u8 data_hi = **buffer;
+		(*buffer)++;
+		(*n)++;
+		data = (data_hi << 8 | data);
+	}
+
+	fprintf(outfile, "add %s, %d\n", registers[inst.w][0], data);
 }
 
 static void decode_add_imm2reg(FILE* outfile, Opcodes* ops, u8** buffer, size_t* n) {
