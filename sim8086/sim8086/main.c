@@ -158,10 +158,7 @@ static void decode_add_imm2acc(FILE* outfile, Opcodes* ops, u8** buffer, size_t*
 	Instruction inst = {
 		.w = ops->first_byte & 1
 	};
-	i32 data = **buffer;
-	
-	(*buffer)++;
-	(*n)++;
+	i32 data = ops->second_byte;
 
 	if (inst.w) {
 		u8 data_hi = **buffer;
