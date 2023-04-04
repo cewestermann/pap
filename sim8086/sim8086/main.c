@@ -39,8 +39,13 @@ typedef enum {
 	reg2seg,
 	seg2reg,
 	add_reg2either,
-	add_imm2reg,
+	arithmetic_imm2reg,
 	add_imm2acc,
+	sub_reg2either,
+	sub_imm2reg,
+	sub_imm_from_acc,
+	cmp_reg_reg,
+	cmp_imm_acc,
 	type_count
 } instruction_type;
 
@@ -53,8 +58,13 @@ const char* instruction_type_strings[] = {
 	"reg2seg",
 	"seg2reg",
 	"add_reg2either",
-	"add_imm2reg",
+	"arithmetic_imm2reg",
 	"add_imm2acc",
+	"sub_reg2either",
+	"sub_imm2reg",
+	"sub_imm_from_acc",
+	"cmp_reg_reg",
+	"cmp_imm_acc",
 	"type_count"
 };
 
@@ -74,10 +84,20 @@ InstructionByte instructions[type_count] = {
 	[reg2seg] = {0b10001110, 8},
 	[seg2reg] = {0b10001100, 8},
 
+	// For arithmetics, we have to look at the octal value in the second byte
+	[arithmetic_imm2reg] = {0b100000, 6},
+
 	// ADD
 	[add_reg2either] = {0b000000, 6},
-	[add_imm2reg] = {0b100000, 6},
-	[add_imm2acc] = {0b0000010, 7}
+	[add_imm2acc] = {0b0000010, 7},
+
+	// SUB
+	[sub_reg2either] = {0b001010, 6},
+	[sub_imm_from_acc] = {0b0010110, 7},
+
+	// CMP
+	[cmp_reg_reg] = {0b001110, 6},
+	[cmp_imm_acc] = {0b0011110, 7},
 };
 
 struct File {
@@ -145,7 +165,7 @@ int main(int argc, char* argv[]) {
 		case reg2reg: decode_reg2reg("mov", outfile, &ops, &buffer, &n); break;
 		case imm2reg: decode_imm2reg("mov", outfile, &ops, &buffer, &n); break;
 		case add_reg2either: decode_reg2reg("add", outfile, &ops, &buffer, &n); break;
-		case add_imm2reg: decode_add_imm2reg(outfile, &ops, &buffer, &n); break;
+		case arithmetic_imm2reg: decode_add_imm2reg(outfile, &ops, &buffer, &n); break;
 		case add_imm2acc: decode_add_imm2acc(outfile, &ops, &buffer, &n); break;
 		default: printf("No such itype: %zu\n", itype);
 				 exit(EXIT_FAILURE);
