@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "utils.h"
+#include "pap_types.h"
 
 #define N_ENCODING_FIELDS 8
 
@@ -23,13 +23,13 @@ const char* eac[N_ENCODING_FIELDS] = {
 };
 
 typedef enum {
-	reg2reg,
-	imm2mem,
-	imm2reg,
-	mem2acc,
-	acc2mem,
-	reg2seg,
-	seg2reg,
+	mov_reg2reg,
+	mov_imm2mem,
+	mov_imm2reg,
+	mov_mem2acc,
+	mov_acc2mem,
+	mov_reg2seg,
+	mov_seg2reg,
 	add_reg2either,
 	arithmetic_imm2reg,
 	add_imm2acc,
@@ -42,13 +42,13 @@ typedef enum {
 } instruction_type;
 
 const char* instruction_type_strings[] = {
-	"reg2reg",
-	"imm2mem",
-	"imm2reg",
-	"mem2acc",
-	"acc2mem",
-	"reg2seg",
-	"seg2reg",
+	"mov_reg2reg",
+	"mov_imm2mem",
+	"mov_imm2reg",
+	"mov_mem2acc",
+	"mov_acc2mem",
+	"mov_reg2seg",
+	"mov_seg2reg",
 	"add_reg2either",
 	"arithmetic_imm2reg",
 	"add_imm2acc",
@@ -68,13 +68,13 @@ typedef struct InstructionByte {
 InstructionByte instructions[type_count] = {
 	// MOV
 	// {bit_sequence, number_of_bits}
-	[reg2reg] = {0b100010, 6},
-	[imm2mem] = {0b1100011, 7},
-	[imm2reg] = {0b1011, 4},
-	[mem2acc] = {0b1010000, 7},
-	[acc2mem] = {0b1010001, 7},
-	[reg2seg] = {0b10001110, 8},
-	[seg2reg] = {0b10001100, 8},
+	[mov_reg2reg] = {0b100010, 6},
+	[mov_imm2mem] = {0b1100011, 7},
+	[mov_imm2reg] = {0b1011, 4},
+	[mov_mem2acc] = {0b1010000, 7},
+	[mov_acc2mem] = {0b1010001, 7},
+	[mov_reg2seg] = {0b10001110, 8},
+	[mov_seg2reg] = {0b10001100, 8},
 
 	// For arithmetics, we have to look at the octal value in the second byte
 	[arithmetic_imm2reg] = {0b100000, 6},
@@ -92,27 +92,121 @@ InstructionByte instructions[type_count] = {
 	[cmp_imm_acc] = {0b0011110, 7},
 };
 
-typedef struct DecodeContext {
-    FILE* outfile;
-    u8 first_byte;
-    u8** buffer;
-    size_t* file_pos;
-} DecodeContext;
+typedef struct Instruction {
+    u8 d;
+    u8 s;
+    u8 w;
+    u8 mod;
+    u8 reg;
+    u8 r_m;
+    u8 disp_lo;
+    u8 disp_hi;
+    u8 addr_lo;
+    u8 addr_hi;
+    u8 sr;
+    i32 data;
+} Instruction;
+
 
 static size_t get_instruction_type(u8 first_byte);
 static void declare_match(size_t idx);
-static void decode_reg2reg(DecodeContext* dc);
+static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
 static u8 get_mod_encoding(u8 second_byte);
 static u8 get_r_m_encoding(u8 second_byte);
+static void write_mod11(FILE* outfile, Instruction* inst);
+static void write_eac(FILE* outfile, Instruction* inst);
 
-static void decode_reg2reg(DecodeContext* dc) {
-    Opcodes* oc = dc->opcodes;
+static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
+    /* Decode mov_reg2reg. Return the number of bytes
+     * that have been pulled from the buffer during decoding */
+    int bytes_grabbed = 0;
 
-    u8 d = ((oc.first_byte >> 1) & 1);
-    u8 w = oc.first_byte & 1;
-    u8 mod = get_mod_encoding(oc.second_byte);
-    u8 reg = ((dc->opcodes->second_byte >> 3) & 0b111);
-    u8 r_m = get_r_m_encoding(dc->opcodes->second_byte);
+    u8 second_byte = **filebuffer;
+    (*filebuffer)++;
+    bytes_grabbed++;
+
+    Instruction inst = {
+        .d = (first_byte >> 1) & 1,
+        .w = first_byte & 1,
+        .mod = get_mod_encoding(second_byte),
+        .reg = (second_byte >> 3) & 0b111,
+        .r_m = get_r_m_encoding(second_byte),
+    };
+
+
+    switch (inst.mod) {
+    case 0b11: write_mod11(outfile, &inst); break;
+    case 0b00:
+    {
+        if (inst.r_m == 0b110) {
+            inst.disp_lo = **filebuffer;
+            (*filebuffer)++;
+            inst.disp_hi = **filebuffer;
+            (*filebuffer)++;
+            inst.data = (inst.disp_hi << 8 | inst.disp_lo);
+            bytes_grabbed += 2;
+        }
+        write_eac(outfile, &inst);
+        break;
+    }
+    case 0b01:
+    {
+        inst.disp_lo = **filebuffer;
+        (*filebuffer)++;
+        inst.data = inst.disp_lo;
+        bytes_grabbed++;
+
+        write_eac(outfile, &inst);
+        break;
+    }
+    case 0b10:
+    {
+        inst.disp_lo = **filebuffer;
+        (*filebuffer)++;
+        inst.disp_hi = **filebuffer;
+        (*filebuffer)++;
+        inst.data = (inst.disp_hi << 8 | inst.disp_lo);
+        bytes_grabbed += 2;
+
+        write_eac(outfile, &inst);
+        break;
+    }
+    default:
+        printf("ERROR: No such MOD number: %d", inst.mod);
+        exit(EXIT_FAILURE);
+    }
+    return bytes_grabbed;
+}
+
+static void  write_mod11(FILE* outfile, Instruction* inst) {
+    char const*const reg_field = registers[inst->w][inst->reg];
+    char const*const r_m_field = registers[inst->w][inst->r_m];
+    if (inst->d)
+        fprintf(outfile, "mov %s, %s\n", reg_field, r_m_field);
+    else
+        fprintf(outfile, "mov %s, %s\n", r_m_field, reg_field);
+}
+
+static void write_eac(FILE* outfile, Instruction* inst) {
+    char const*const reg_field = registers[inst->w][inst->reg];
+    char const*const eac_field = eac[inst->r_m];
+
+	if (inst->d) {
+		if (inst->data) {
+			fprintf(outfile, "mov %s, [%s + %d]\n", reg_field, eac_field, inst->data);
+		}
+		else {
+			fprintf(outfile, "mov %s, [%s]\n", reg_field, eac_field);
+		}
+	}
+	else {
+		if (inst->data) {
+			fprintf(outfile, "mov [%s + %d], %s\n", eac_field, inst->data, reg_field);
+		}
+		else {
+			fprintf(outfile, "mov [%s], %s\n", eac_field, reg_field);
+		}
+	}
 }
 
 static u8 get_mod_encoding(u8 second_byte) {
