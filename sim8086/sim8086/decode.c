@@ -115,6 +115,7 @@ static u8 get_mod_encoding(u8 second_byte);
 static u8 get_r_m_encoding(u8 second_byte);
 static void write_mod11(FILE* outfile, Instruction* inst);
 static void write_eac(FILE* outfile, Instruction* inst);
+static i32 displacement_16bit(u8** filebuffer);
 
 static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
     /* Decode mov_reg2reg. Return the number of bytes
@@ -139,11 +140,7 @@ static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
     case 0b00:
     {
         if (inst.r_m == 0b110) {
-            inst.disp_lo = **filebuffer;
-            (*filebuffer)++;
-            inst.disp_hi = **filebuffer;
-            (*filebuffer)++;
-            inst.data = (inst.disp_hi << 8 | inst.disp_lo);
+            inst.data = displacement_16bit(filebuffer);
             bytes_grabbed += 2;
         }
         write_eac(outfile, &inst);
@@ -161,11 +158,7 @@ static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
     }
     case 0b10:
     {
-        inst.disp_lo = **filebuffer;
-        (*filebuffer)++;
-        inst.disp_hi = **filebuffer;
-        (*filebuffer)++;
-        inst.data = (inst.disp_hi << 8 | inst.disp_lo);
+        inst.data = displacement_16bit(filebuffer);
         bytes_grabbed += 2;
 
         write_eac(outfile, &inst);
@@ -176,6 +169,15 @@ static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
         exit(EXIT_FAILURE);
     }
     return bytes_grabbed;
+}
+
+static i32 displacement_16bit(u8** filebuffer) {
+	u8 disp_lo = **filebuffer;
+	(*filebuffer)++;
+	u8 disp_hi = **filebuffer;
+	(*filebuffer)++;
+	i32 result = (disp_hi << 8 | disp_lo);
+	return result;
 }
 
 static void  write_mod11(FILE* outfile, Instruction* inst) {
