@@ -18,6 +18,15 @@ int main(int argc, char* argv[argc + 1]) {
 	FILE* outfile = fopen("out.asm", "w");
 	struct File file = read_entire_file("./encodings/listing_0041_add_sub_cmp_jnz");
 
+	u8* filebuffer = file.contents;
+
+	for (size_t n = 0; n < file.size; n += 2) {
+        u8 first_byte = *filebuffer++;
+        n++;
+
+		size_t itype = get_instruction_type(first_byte);
+    }
+
     return EXIT_SUCCESS;
 }
 

@@ -24,25 +24,6 @@ const char* eac[N_ENCODING_FIELDS] = {
 	"bx",
 };
 
-typedef enum {
-	mov_reg2reg,
-	mov_imm2mem,
-	mov_imm2reg,
-	mov_mem2acc,
-	mov_acc2mem,
-	mov_reg2seg,
-	mov_seg2reg,
-	add_reg2either,
-	arithmetic_imm2reg,
-	add_imm2acc,
-	sub_reg2either,
-	sub_imm2reg,
-	sub_imm_from_acc,
-	cmp_reg_reg,
-	cmp_imm_acc,
-	type_count
-} instruction_type;
-
 const char* instruction_type_strings[] = {
 	"mov_reg2reg",
 	"mov_imm2mem",
@@ -110,7 +91,6 @@ typedef struct Instruction {
 } Instruction;
 
 
-static size_t get_instruction_type(u8 first_byte);
 static void declare_match(size_t idx);
 static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
 static int decode_imm2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
@@ -120,7 +100,7 @@ static void write_mod11(FILE* outfile, Instruction* inst);
 static void write_eac(FILE* outfile, Instruction* inst);
 static i32 displacement_16bit(u8** filebuffer);
 
-static decode_func* decoders[] = {
+decode_func* decoders[] = {
     [mov_reg2reg] = decode_reg2reg,
     [mov_imm2reg] = decode_imm2reg
 };
@@ -252,7 +232,7 @@ static u8 get_r_m_encoding(u8 second_byte) {
 	return second_byte & 0b111;
 }
 
-static size_t get_instruction_type(u8 first_byte) {
+size_t get_instruction_type(u8 first_byte) {
     /* Match the first byte against the instruction type table
      * by comparing the first n unique bits of the possible
      * instructions */
