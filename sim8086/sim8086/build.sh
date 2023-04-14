@@ -1,3 +1,3 @@
 #!/usr/bin/bash
 
-clang -Wall -o decode decode.c main.c
+gcc -Wall -o decode decode.c main.c

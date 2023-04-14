@@ -18,9 +18,6 @@ int main(int argc, char* argv[argc + 1]) {
 	FILE* outfile = fopen("out.asm", "w");
 	struct File file = read_entire_file("./encodings/listing_0041_add_sub_cmp_jnz");
 
-
-
-
     return EXIT_SUCCESS;
 }
 

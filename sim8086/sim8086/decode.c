@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <assert.h>
 
 #include "pap_types.h"
+#include "decode.h"
 
 #define N_ENCODING_FIELDS 8
 
@@ -93,9 +95,9 @@ InstructionByte instructions[type_count] = {
 };
 
 typedef struct Instruction {
-    u8 d;
-    u8 s;
-    u8 w;
+    bool d;
+    bool s;
+    bool w;
     u8 mod;
     u8 reg;
     u8 r_m;
@@ -111,16 +113,22 @@ typedef struct Instruction {
 static size_t get_instruction_type(u8 first_byte);
 static void declare_match(size_t idx);
 static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
+static int decode_imm2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
 static u8 get_mod_encoding(u8 second_byte);
 static u8 get_r_m_encoding(u8 second_byte);
 static void write_mod11(FILE* outfile, Instruction* inst);
 static void write_eac(FILE* outfile, Instruction* inst);
 static i32 displacement_16bit(u8** filebuffer);
 
+static decode_func* decoders[] = {
+    [mov_reg2reg] = decode_reg2reg,
+    [mov_imm2reg] = decode_imm2reg
+};
+
 static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
     /* Decode mov_reg2reg. Return the number of bytes
      * that have been pulled from the buffer during decoding */
-    int bytes_grabbed = 0;
+    u8 bytes_grabbed = 0;
 
     u8 second_byte = **filebuffer;
     (*filebuffer)++;
@@ -133,7 +141,6 @@ static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
         .reg = (second_byte >> 3) & 0b111,
         .r_m = get_r_m_encoding(second_byte),
     };
-
 
     switch (inst.mod) {
     case 0b11: write_mod11(outfile, &inst); break;
@@ -171,6 +178,32 @@ static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
     return bytes_grabbed;
 }
 
+static int decode_imm2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
+    u8 bytes_grabbed = 0;
+
+    Instruction inst = {
+        .w = (first_byte >> 3) & 1,
+        .reg = first_byte & 0b111
+    };
+
+    u8 second_byte = **filebuffer;
+    (*filebuffer)++;
+    bytes_grabbed++;
+
+    if (inst.w) {
+        u8 hi = **filebuffer;
+        (*filebuffer)++;
+        bytes_grabbed++;
+        inst.data = (hi << 8 | second_byte);
+    } else {
+        inst.data = second_byte; 
+    }
+
+    fprintf(outfile, "mov, %s, %d\n", registers[inst.w][inst.reg], inst.data);
+    return bytes_grabbed;
+}
+
+
 static i32 displacement_16bit(u8** filebuffer) {
 	u8 disp_lo = **filebuffer;
 	(*filebuffer)++;
@@ -194,7 +227,7 @@ static void write_eac(FILE* outfile, Instruction* inst) {
     char const*const eac_field = eac[inst->r_m];
 
 	if (inst->d) {
-		if (inst->data) {
+		if (inst->data) { // Displacement
 			fprintf(outfile, "mov %s, [%s + %d]\n", reg_field, eac_field, inst->data);
 		}
 		else {
