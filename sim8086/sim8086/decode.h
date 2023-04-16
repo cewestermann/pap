@@ -30,6 +30,4 @@ typedef enum {
 size_t get_instruction_type(u8 first_byte);
 
 typedef int decode_func(u8 first_byte, u8** filebuffer, FILE* outfile);
-
-extern decode_func* decoder;
 extern decode_func* decoders[];

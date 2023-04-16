@@ -26,11 +26,9 @@ int main(int argc, char* argv[argc + 1]) {
 
 		size_t itype = get_instruction_type(first_byte);
 
-        decoder = decoders[itype];
+        decode_func* decoder = decoders[itype];
 
-        n += decoder(first_byte, &filebuffer, outfile);
     }
-
     return EXIT_SUCCESS;
 }
 
