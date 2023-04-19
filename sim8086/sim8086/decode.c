@@ -96,20 +96,34 @@ typedef struct Instruction {
 
 
 static void declare_match(size_t idx);
-static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
-static int decode_imm2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
+static int mov_decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
+static int mov_decode_imm2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
+static int add_decode_reg2either(u8 first_byte, u8** filebuffer, FILE* outfile);
+static int add_decode_imm2acc(u8 first_byte, u8** filebuffer, FILE* outfile);
 static u8 get_mod_encoding(u8 second_byte);
 static u8 get_r_m_encoding(u8 second_byte);
 static void write_mod11(FILE* outfile, Instruction* inst);
-static void write_eac(FILE* outfile, Instruction* inst);
+static void write_eac_mov(FILE* outfile, Instruction* inst);
 static i32 displacement_16bit(u8** filebuffer);
 
 decode_func* decoders[] = {
-    [mov_reg2reg] = decode_reg2reg,
-    [mov_imm2reg] = decode_imm2reg
+    [mov_reg2reg] = mov_decode_reg2reg,
+    [mov_imm2reg] = mov_decode_imm2reg,
+
+    [add_reg2either] = add_decode_reg2either,
+    [add_imm2acc] = add_decode_imm2acc,
+
 };
 
-static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
+static int add_decode_reg2either(u8 first_byte, u8** filebuffer, FILE* outfile) {
+   return 0; 
+}
+
+static int add_decode_imm2acc(u8 first_byte, u8** filebuffer, FILE* outfile) {
+   return 0; 
+}
+
+static int mov_decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
     /* Decode mov_reg2reg. Return the number of bytes
      * that have been pulled from the buffer during decoding */
     u8 bytes_grabbed = 0;
@@ -134,7 +148,7 @@ static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
             inst.data = displacement_16bit(filebuffer);
             bytes_grabbed += 2;
         }
-        write_eac(outfile, &inst);
+        write_eac_mov(outfile, &inst);
         break;
     }
     case 0b01:
@@ -144,7 +158,7 @@ static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
         inst.data = inst.disp_lo;
         bytes_grabbed++;
 
-        write_eac(outfile, &inst);
+        write_eac_mov(outfile, &inst);
         break;
     }
     case 0b10:
@@ -152,7 +166,7 @@ static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
         inst.data = displacement_16bit(filebuffer);
         bytes_grabbed += 2;
 
-        write_eac(outfile, &inst);
+        write_eac_mov(outfile, &inst);
         break;
     }
     default:
@@ -162,7 +176,7 @@ static int decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
     return bytes_grabbed;
 }
 
-static int decode_imm2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
+static int mov_decode_imm2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
     u8 bytes_grabbed = 0;
 
     Instruction inst = {
@@ -205,7 +219,7 @@ static void  write_mod11(FILE* outfile, Instruction* inst) {
         fprintf(outfile, "mov %s, %s\n", r_m_field, reg_field);
 }
 
-static void write_eac(FILE* outfile, Instruction* inst) {
+static void write_eac_mov(FILE* outfile, Instruction* inst) {
     char const*const reg_field = registers[inst->w][inst->reg];
     char const*const eac_field = eac[inst->r_m];
 
