@@ -183,10 +183,9 @@ static int decode_imm2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
         inst.data = second_byte; 
     }
 
-    fprintf(outfile, "mov, %s, %d\n", registers[inst.w][inst.reg], inst.data);
+    fprintf(outfile, "mov %s, %d\n", registers[inst.w][inst.reg], inst.data);
     return bytes_grabbed;
 }
-
 
 static i32 displacement_16bit(u8** filebuffer) {
 	u8 disp_lo = **filebuffer;

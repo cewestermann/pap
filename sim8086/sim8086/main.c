@@ -16,7 +16,9 @@ static void free_entire_file(struct File* file);
 /* Entry point */
 int main(int argc, char* argv[argc + 1]) {
 	FILE* outfile = fopen("out.asm", "w");
-	struct File file = read_entire_file("./encodings/listing_0041_add_sub_cmp_jnz");
+	struct File file = read_entire_file("./encodings/listing_0039_more_movs");
+
+    fprintf(outfile, "bits 16\n\n");
 
 	u8* filebuffer = file.contents;
 
@@ -27,6 +29,7 @@ int main(int argc, char* argv[argc + 1]) {
 		size_t itype = get_instruction_type(first_byte);
 
         decode_func* decoder = decoders[itype];
+        n += decoder(first_byte, &filebuffer, outfile);
 
     }
     return EXIT_SUCCESS;
@@ -62,7 +65,7 @@ static struct File read_entire_file(char* filename) {
 static void free_entire_file(struct File* file) {
 	if (file->contents) {
 		free(file->contents);
-		file->contents = 0;
+		file->contents = 0; // Important to set pointer to 0 (null pointer)
 	}
 
 	file->size = 0;
