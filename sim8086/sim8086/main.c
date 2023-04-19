@@ -16,7 +16,7 @@ static void free_entire_file(struct File* file);
 /* Entry point */
 int main(int argc, char* argv[argc + 1]) {
 	FILE* outfile = fopen("out.asm", "w");
-	struct File file = read_entire_file("./encodings/listing_0039_more_movs");
+	struct File file = read_entire_file("./encodings/listing_0041_add_sub_cmp_jnz");
 
     fprintf(outfile, "bits 16\n\n");
 

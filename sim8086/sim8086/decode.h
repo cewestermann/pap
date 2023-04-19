@@ -12,7 +12,7 @@ typedef enum {
 	mov_reg2seg,
 	mov_seg2reg,
 
-	arithmetic_imm2reg,
+	arithmetic_imm_reg,
 
 	add_reg_either,
 	add_imm_acc,

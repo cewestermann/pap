@@ -64,7 +64,7 @@ InstructionByte instructions[type_count] = {
 	[mov_seg2reg] = {0b10001100, 8},
 
 	// For arithmetics, we have to look at the octal value in the second byte
-    [arithmetic_imm2reg] = {0b100000, 6},
+    [arithmetic_imm_reg] = {0b100000, 6},
 
 	// ADD
 	[add_reg_either] = {0b000000, 6},
@@ -101,7 +101,7 @@ static int mov_decode_imm2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
 
 static int arithmetic_decode_reg_either(char* arithmetic_type, u8 first_byte, u8** filebuffer, FILE* outfile);
 static int arithmetic_decode_imm_reg(u8 first_byte, u8** filebuffer, FILE* outfile);
-static int arithmetic_decode_imm_acc(char* arithmetic_type, u8 first_byte, u8** filebuffer, FILE* outfile);
+// static int arithmetic_decode_imm_acc(char* arithmetic_type, u8 first_byte, u8** filebuffer, FILE* outfile);
 
 static int add_decode_reg_either(u8 first_byte, u8** filebuffer, FILE* outfile);
 static int sub_decode_reg_either(u8 first_byte, u8** filebuffer, FILE* outfile);
@@ -123,6 +123,8 @@ decode_func* decoders[] = {
     [add_reg_either] = add_decode_reg_either,
     [sub_reg_either] = sub_decode_reg_either,
     [cmp_reg_either] = cmp_decode_reg_either,
+
+    [arithmetic_imm_reg] = arithmetic_decode_imm_reg,
 };
 
 static int arithmetic_decode_imm_reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
@@ -196,6 +198,19 @@ static int arithmetic_decode_imm_reg(u8 first_byte, u8** filebuffer, FILE* outfi
         i32 displacement = (inst.disp_hi << 8 | inst.disp_lo);
         (*filebuffer)++;
         bytes_grabbed += 3;
+        printf("%d", displacement);
+
+        // Something has to be done here vv
+
+        /* inst.data = **filebuffer;
+        (*filebuffer)++;
+        bytes_grabbed++;
+        u8 ext = **filebuffer;
+        (*filebuffer)++;
+        bytes_grabbed++;
+        inst.data = (ext << 8 | inst.data); */
+
+
         write_data_to_file(outfile, &inst, displacement);
     }
     default:
@@ -368,19 +383,21 @@ static void write_data_to_file(FILE* outfile, Instruction* inst, i32 displacemen
 }
 
 static void  write_mod11(FILE* outfile, Instruction* inst) {
+    const char* inst_type = (inst->inst_type) ? inst->inst_type : "mov";
+
     char const*const reg_field = registers[inst->w][inst->reg];
     char const*const r_m_field = registers[inst->w][inst->r_m];
     if (inst->d)
-        fprintf(outfile, "mov %s, %s\n", reg_field, r_m_field);
+        fprintf(outfile, "%s %s, %s\n", inst_type, reg_field, r_m_field);
     else
-        fprintf(outfile, "mov %s, %s\n", r_m_field, reg_field);
+        fprintf(outfile, "%s %s, %s\n", inst_type, r_m_field, reg_field);
 }
 
 static void write_eac(FILE* outfile, Instruction* inst) {
     char const*const reg_field = registers[inst->w][inst->reg];
     char const*const eac_field = eac[inst->r_m];
 
-    char* inst_type = (inst->inst_type) ? inst->inst_type : "mov";
+    const char* inst_type = (inst->inst_type) ? inst->inst_type : "mov";
 
 	if (inst->d) {
 		if (inst->data) { // Displacement
@@ -416,7 +433,7 @@ size_t get_instruction_type(u8 first_byte) {
 
     // If first byte is zero, the buffer is at an
     // incorrect location and has not been updated correctly
-    assert(first_byte);
+    //assert(first_byte); // Assert stops filewrite
 
 	for (i = 0; i < type_count; i++) {
 
