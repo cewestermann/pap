@@ -42,8 +42,8 @@ const char* instruction_type_strings[] = {
 	"sub_imm2reg",
 	"sub_imm_from_acc",
 
-	"cmp_reg_reg",
-	"cmp_imm_acc",
+	"cmp_reg2either",
+	"cmp_imm2acc",
 	"type_count"
 };
 
@@ -64,22 +64,23 @@ InstructionByte instructions[type_count] = {
 	[mov_seg2reg] = {0b10001100, 8},
 
 	// For arithmetics, we have to look at the octal value in the second byte
-	[arithmetic_imm2reg] = {0b100000, 6},
+    [arithmetic_imm2reg] = {0b100000, 6},
 
 	// ADD
-	[add_reg2either] = {0b000000, 6},
-	[add_imm2acc] = {0b0000010, 7},
+	[add_reg_either] = {0b000000, 6},
+	[add_imm_acc] = {0b0000010, 7},
 
 	// SUB
-	[sub_reg2either] = {0b001010, 6},
-	[sub_imm_from_acc] = {0b0010110, 7},
+	[sub_reg_either] = {0b001010, 6},
+	[sub_imm_acc] = {0b0010110, 7},
 
 	// CMP
-	[cmp_reg_reg] = {0b001110, 6},
+	[cmp_reg_either] = {0b001110, 6}, // Yes the name is not accurate, but just for consistency
 	[cmp_imm_acc] = {0b0011110, 7},
 };
 
 typedef struct Instruction {
+    const char* inst_type;
     bool d;
     bool s;
     bool w;
@@ -94,34 +95,180 @@ typedef struct Instruction {
     i32 data;
 } Instruction;
 
-
 static void declare_match(size_t idx);
 static int mov_decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
 static int mov_decode_imm2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
-static int add_decode_reg2either(u8 first_byte, u8** filebuffer, FILE* outfile);
-static int add_decode_imm2acc(u8 first_byte, u8** filebuffer, FILE* outfile);
+
+static int arithmetic_decode_reg_either(char* arithmetic_type, u8 first_byte, u8** filebuffer, FILE* outfile);
+static int arithmetic_decode_imm_reg(u8 first_byte, u8** filebuffer, FILE* outfile);
+static int arithmetic_decode_imm_acc(char* arithmetic_type, u8 first_byte, u8** filebuffer, FILE* outfile);
+
+static int add_decode_reg_either(u8 first_byte, u8** filebuffer, FILE* outfile);
+static int sub_decode_reg_either(u8 first_byte, u8** filebuffer, FILE* outfile);
+static int cmp_decode_reg_either(u8 first_byte, u8** filebuffer, FILE* outfile);
+
 static u8 get_mod_encoding(u8 second_byte);
 static u8 get_r_m_encoding(u8 second_byte);
+
+static void write_data_to_file(FILE* outfile, Instruction* inst, i32 displacement);
 static void write_mod11(FILE* outfile, Instruction* inst);
-static void write_eac_mov(FILE* outfile, Instruction* inst);
+static void write_eac(FILE* outfile, Instruction* inst);
+
 static i32 displacement_16bit(u8** filebuffer);
 
 decode_func* decoders[] = {
     [mov_reg2reg] = mov_decode_reg2reg,
     [mov_imm2reg] = mov_decode_imm2reg,
 
-    [add_reg2either] = add_decode_reg2either,
-    [add_imm2acc] = add_decode_imm2acc,
-
+    [add_reg_either] = add_decode_reg_either,
+    [sub_reg_either] = sub_decode_reg_either,
+    [cmp_reg_either] = cmp_decode_reg_either,
 };
 
-static int add_decode_reg2either(u8 first_byte, u8** filebuffer, FILE* outfile) {
-   return 0; 
+static int arithmetic_decode_imm_reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
+
+    static const char* arith_types[] = {
+        [0b000] = "add",
+        [0b101] = "sub",
+        [0b111] = "cmp"
+    };
+
+    const char* arithmetic_type = arith_types[(first_byte >> 3) & 0b111];
+
+    int bytes_grabbed = 0;
+
+    u8 second_byte = **filebuffer;
+    (*filebuffer)++;
+    bytes_grabbed++;
+
+    Instruction inst = {
+        .inst_type = arithmetic_type,
+        .s = (first_byte >> 1) & 1,
+        .w = first_byte & 1,
+        .mod = get_mod_encoding(second_byte),
+        .r_m = get_r_m_encoding(second_byte),
+    };
+
+    switch (inst.mod) {
+    case 0b11:
+    {
+        u8 data = **filebuffer;
+        (*filebuffer)++;
+        bytes_grabbed++;
+
+        if (inst.w && !inst.s) {
+            u8 ext = **filebuffer;
+            (*filebuffer)++;
+            bytes_grabbed++;
+            data = (ext << 8 | data);
+        }
+        else {
+            data = (data << 8 | data); // Sign extend to 16 bits
+        }
+        fprintf(outfile, "%s, %s, %d\n", inst.inst_type, registers[inst.w][inst.r_m], data);
+        break;
+    }
+    case 0b00:
+    {
+        inst.data = **filebuffer;
+        (*filebuffer)++;
+        bytes_grabbed++;
+
+        write_data_to_file(outfile, &inst, 0);
+        break;
+    }
+    case 0b01:
+    {
+        inst.disp_lo = **filebuffer;
+        (*filebuffer)++;
+        inst.data = **filebuffer;
+        (*filebuffer)++;
+        bytes_grabbed += 2;
+        write_data_to_file(outfile, &inst, (i32)inst.disp_lo);
+        break;
+    }
+    case 0b10:
+    {
+        inst.disp_lo = **filebuffer;
+        (*filebuffer)++;
+        inst.disp_hi = **filebuffer;
+        (*filebuffer)++;
+        i32 displacement = (inst.disp_hi << 8 | inst.disp_lo);
+        (*filebuffer)++;
+        bytes_grabbed += 3;
+        write_data_to_file(outfile, &inst, displacement);
+    }
+    default:
+        printf("ERROR: No such MOD for arithmetic_imm_reg");
+        exit(EXIT_FAILURE);
+    }
+    return bytes_grabbed;
 }
 
-static int add_decode_imm2acc(u8 first_byte, u8** filebuffer, FILE* outfile) {
-   return 0; 
+static int add_decode_reg_either(u8 first_byte, u8** filebuffer, FILE* outfile) {
+    return arithmetic_decode_reg_either("add", first_byte, filebuffer, outfile);
 }
+
+static int sub_decode_reg_either(u8 first_byte, u8** filebuffer, FILE* outfile) {
+    return arithmetic_decode_reg_either("sub", first_byte, filebuffer, outfile);
+}
+
+static int cmp_decode_reg_either(u8 first_byte, u8** filebuffer, FILE* outfile) {
+    return arithmetic_decode_reg_either("cmp", first_byte, filebuffer, outfile);
+}
+
+static int arithmetic_decode_reg_either(char* arithmetic_type, u8 first_byte, u8** filebuffer, FILE* outfile) {
+    u8 bytes_grabbed = 0;
+
+    u8 second_byte = **filebuffer;
+    (*filebuffer)++;
+    bytes_grabbed++;
+
+    Instruction inst = {
+        .inst_type = arithmetic_type,
+        .d = (first_byte >> 1) & 1,
+        .w = first_byte & 1,
+        .mod = get_mod_encoding(second_byte),
+        .reg = (second_byte >> 3) & 0b111,
+        .r_m = get_r_m_encoding(second_byte),
+    };
+
+    switch (inst.mod) {
+    case 0b11: write_mod11(outfile, &inst); break;
+    case 0b00:
+    {
+        if (inst.r_m == 0b110) {
+            inst.data = displacement_16bit(filebuffer);
+            bytes_grabbed += 2;
+        }
+        write_eac(outfile, &inst);
+        break;
+    }
+    case 0b01:
+    {
+        inst.disp_lo = **filebuffer;
+        (*filebuffer)++;
+        inst.data = inst.disp_lo;
+        bytes_grabbed++;
+
+        write_eac(outfile, &inst);
+        break;
+    }
+    case 0b10:
+    {
+        inst.data = displacement_16bit(filebuffer);
+        bytes_grabbed += 2;
+
+        write_eac(outfile, &inst);
+        break;
+    }
+    default:
+        printf("ERROR: No such MOD number: %d", inst.mod);
+        exit(EXIT_FAILURE);
+    }
+    return bytes_grabbed;
+}
+
 
 static int mov_decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
     /* Decode mov_reg2reg. Return the number of bytes
@@ -148,7 +295,7 @@ static int mov_decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
             inst.data = displacement_16bit(filebuffer);
             bytes_grabbed += 2;
         }
-        write_eac_mov(outfile, &inst);
+        write_eac(outfile, &inst);
         break;
     }
     case 0b01:
@@ -158,7 +305,7 @@ static int mov_decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
         inst.data = inst.disp_lo;
         bytes_grabbed++;
 
-        write_eac_mov(outfile, &inst);
+        write_eac(outfile, &inst);
         break;
     }
     case 0b10:
@@ -166,7 +313,7 @@ static int mov_decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
         inst.data = displacement_16bit(filebuffer);
         bytes_grabbed += 2;
 
-        write_eac_mov(outfile, &inst);
+        write_eac(outfile, &inst);
         break;
     }
     default:
@@ -210,6 +357,16 @@ static i32 displacement_16bit(u8** filebuffer) {
 	return result;
 }
 
+static void write_data_to_file(FILE* outfile, Instruction* inst, i32 displacement) {
+
+    char* word_or_byte = (inst->w) ? "word" : "byte";
+
+	if (displacement)
+		fprintf(outfile, "%s %s [%s + %d], %d\n", inst->inst_type, word_or_byte, eac[inst->r_m], displacement, inst->data);
+	else
+		fprintf(outfile, "%s %s [%s], %d\n", inst->inst_type, word_or_byte, eac[inst->r_m], inst->data);
+}
+
 static void  write_mod11(FILE* outfile, Instruction* inst) {
     char const*const reg_field = registers[inst->w][inst->reg];
     char const*const r_m_field = registers[inst->w][inst->r_m];
@@ -219,24 +376,26 @@ static void  write_mod11(FILE* outfile, Instruction* inst) {
         fprintf(outfile, "mov %s, %s\n", r_m_field, reg_field);
 }
 
-static void write_eac_mov(FILE* outfile, Instruction* inst) {
+static void write_eac(FILE* outfile, Instruction* inst) {
     char const*const reg_field = registers[inst->w][inst->reg];
     char const*const eac_field = eac[inst->r_m];
 
+    char* inst_type = (inst->inst_type) ? inst->inst_type : "mov";
+
 	if (inst->d) {
 		if (inst->data) { // Displacement
-			fprintf(outfile, "mov %s, [%s + %d]\n", reg_field, eac_field, inst->data);
+			fprintf(outfile, "%s %s, [%s + %d]\n", inst_type, reg_field, eac_field, inst->data);
 		}
 		else {
-			fprintf(outfile, "mov %s, [%s]\n", reg_field, eac_field);
+			fprintf(outfile, "%s %s, [%s]\n", inst_type, reg_field, eac_field);
 		}
 	}
 	else {
 		if (inst->data) {
-			fprintf(outfile, "mov [%s + %d], %s\n", eac_field, inst->data, reg_field);
+			fprintf(outfile, "%s [%s + %d], %s\n", inst_type, eac_field, inst->data, reg_field);
 		}
 		else {
-			fprintf(outfile, "mov [%s], %s\n", eac_field, reg_field);
+			fprintf(outfile, "%s [%s], %s\n", inst_type, eac_field, reg_field);
 		}
 	}
 }

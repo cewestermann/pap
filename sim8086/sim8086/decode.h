@@ -14,14 +14,14 @@ typedef enum {
 
 	arithmetic_imm2reg,
 
-	add_reg2either,
-	add_imm2acc,
+	add_reg_either,
+	add_imm_acc,
 
-	sub_reg2either,
-	sub_imm2reg,
-	sub_imm_from_acc,
+	sub_reg_either,
+	sub_imm_reg,
+	sub_imm_acc,
 
-	cmp_reg_reg,
+	cmp_reg_either,
 	cmp_imm_acc,
 
 	type_count
