@@ -39,8 +39,7 @@ const char* instruction_type_strings[] = {
 	"add_imm2acc",
 
 	"sub_reg2either",
-	"sub_imm2reg",
-	"sub_imm_from_acc",
+	"sub_imm2acc",
 
 	"cmp_reg2either",
 	"cmp_imm2acc",
@@ -134,7 +133,6 @@ decode_func* decoders[] = {
     [add_imm_acc] = add_decode_imm_acc,
     [sub_imm_acc] = sub_decode_imm_acc,
     [cmp_imm_acc] = cmp_decode_imm_acc,
-
 };
 
 static int add_decode_imm_acc(u8 first_byte, u8** filebuffer, FILE* outfile) {
@@ -162,33 +160,32 @@ static int arithmetic_decode_imm_acc(const char* arithmetic_type, u8 first_byte,
         data = (data << 8 | **filebuffer);
         (*filebuffer)++;
         bytes_grabbed++;
-        fprintf(outfile, "%s ax, %d", arithmetic_type, data);
+        fprintf(outfile, "%s ax, %d\n", arithmetic_type, data);
         return bytes_grabbed;
     }
     
-    fprintf(outfile, "%s al, %d", arithmetic_type, data);
+    fprintf(outfile, "%s al, %d\n", arithmetic_type, data);
     return bytes_grabbed;
 }
 
-const char* get_arithmetic_type(u8 first_byte) {
+const char* get_arithmetic_type(u8 second_byte) {
     static const char* arith_types[] = {
             [0b000] = "add",
             [0b101] = "sub",
             [0b111] = "cmp"
     };
 
-    return arith_types[(first_byte >> 3) & 0b111];
+    return arith_types[(second_byte >> 3) & 0b111];
 }
 
 static int arithmetic_decode_imm_reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
-
-    const char* arithmetic_type = get_arithmetic_type(first_byte);
-
     int bytes_grabbed = 0;
 
     u8 second_byte = **filebuffer;
     (*filebuffer)++;
     bytes_grabbed++;
+
+    const char* arithmetic_type = get_arithmetic_type(second_byte);
 
     Instruction inst = {
         .inst_type = arithmetic_type,
@@ -215,7 +212,7 @@ static int arithmetic_decode_imm_reg(u8 first_byte, u8** filebuffer, FILE* outfi
         else {
             data = (data << 8 | data); // Sign extend to 16 bits
         }
-        fprintf(outfile, "%s, %s, %d\n", inst.inst_type, registers[inst.w][inst.r_m], data);
+        fprintf(outfile, "%s %s, %d\n", inst.inst_type, registers[inst.w][inst.r_m], data);
         break;
     }
     case 0b00:
@@ -241,7 +238,6 @@ static int arithmetic_decode_imm_reg(u8 first_byte, u8** filebuffer, FILE* outfi
     {
         i32 displacement = displacement_16bit(filebuffer);
         bytes_grabbed += 2;
-        printf("%d", displacement);
 
         inst.data = **filebuffer;
         (*filebuffer)++;
@@ -316,7 +312,7 @@ static int arithmetic_decode_reg_either(char* arithmetic_type, u8 first_byte, u8
         break;
     }
     default:
-        printf("ERROR: No such MOD number: %d", inst.mod);
+        printf("ERROR: No such MOD number: %d\n", inst.mod);
         exit(EXIT_FAILURE);
     }
     return bytes_grabbed;

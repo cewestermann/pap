@@ -18,7 +18,6 @@ typedef enum {
 	add_imm_acc,
 
 	sub_reg_either,
-	sub_imm_reg,
 	sub_imm_acc,
 
 	cmp_reg_either,
