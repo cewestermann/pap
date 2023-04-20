@@ -99,13 +99,18 @@ static void declare_match(size_t idx);
 static int mov_decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
 static int mov_decode_imm2reg(u8 first_byte, u8** filebuffer, FILE* outfile);
 
+const char* get_arithmetic_type(u8 first_byte); 
 static int arithmetic_decode_reg_either(char* arithmetic_type, u8 first_byte, u8** filebuffer, FILE* outfile);
 static int arithmetic_decode_imm_reg(u8 first_byte, u8** filebuffer, FILE* outfile);
-// static int arithmetic_decode_imm_acc(char* arithmetic_type, u8 first_byte, u8** filebuffer, FILE* outfile);
+static int arithmetic_decode_imm_acc(const char* arithmetic_type, u8 first_byte, u8** filebuffer, FILE* outfile);
 
 static int add_decode_reg_either(u8 first_byte, u8** filebuffer, FILE* outfile);
 static int sub_decode_reg_either(u8 first_byte, u8** filebuffer, FILE* outfile);
 static int cmp_decode_reg_either(u8 first_byte, u8** filebuffer, FILE* outfile);
+
+static int add_decode_imm_acc(u8 first_byte, u8** filebuffer, FILE* outfile); 
+static int sub_decode_imm_acc(u8 first_byte, u8** filebuffer, FILE* outfile); 
+static int cmp_decode_imm_acc(u8 first_byte, u8** filebuffer, FILE* outfile); 
 
 static u8 get_mod_encoding(u8 second_byte);
 static u8 get_r_m_encoding(u8 second_byte);
@@ -125,17 +130,59 @@ decode_func* decoders[] = {
     [cmp_reg_either] = cmp_decode_reg_either,
 
     [arithmetic_imm_reg] = arithmetic_decode_imm_reg,
+
+    [add_imm_acc] = add_decode_imm_acc,
+    [sub_imm_acc] = sub_decode_imm_acc,
+    [cmp_imm_acc] = cmp_decode_imm_acc,
+
 };
+
+static int add_decode_imm_acc(u8 first_byte, u8** filebuffer, FILE* outfile) {
+    return arithmetic_decode_imm_acc("add", first_byte, filebuffer, outfile);
+}
+
+static int sub_decode_imm_acc(u8 first_byte, u8** filebuffer, FILE* outfile) {
+    return arithmetic_decode_imm_acc("sub", first_byte, filebuffer, outfile);
+}
+
+static int cmp_decode_imm_acc(u8 first_byte, u8** filebuffer, FILE* outfile) {
+    return arithmetic_decode_imm_acc("cmp", first_byte, filebuffer, outfile);
+}
+
+static int arithmetic_decode_imm_acc(const char* arithmetic_type, u8 first_byte, u8** filebuffer, FILE* outfile) {
+
+    int bytes_grabbed = 0;
+
+    i32 data = **filebuffer;
+    (*filebuffer)++;
+    bytes_grabbed++;
+
+    bool w = first_byte & 1;
+    if (w) {
+        data = (data << 8 | **filebuffer);
+        (*filebuffer)++;
+        bytes_grabbed++;
+        fprintf(outfile, "%s ax, %d", arithmetic_type, data);
+        return bytes_grabbed;
+    }
+    
+    fprintf(outfile, "%s al, %d", arithmetic_type, data);
+    return bytes_grabbed;
+}
+
+const char* get_arithmetic_type(u8 first_byte) {
+    static const char* arith_types[] = {
+            [0b000] = "add",
+            [0b101] = "sub",
+            [0b111] = "cmp"
+    };
+
+    return arith_types[(first_byte >> 3) & 0b111];
+}
 
 static int arithmetic_decode_imm_reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
 
-    static const char* arith_types[] = {
-        [0b000] = "add",
-        [0b101] = "sub",
-        [0b111] = "cmp"
-    };
-
-    const char* arithmetic_type = arith_types[(first_byte >> 3) & 0b111];
+    const char* arithmetic_type = get_arithmetic_type(first_byte);
 
     int bytes_grabbed = 0;
 
@@ -151,6 +198,7 @@ static int arithmetic_decode_imm_reg(u8 first_byte, u8** filebuffer, FILE* outfi
         .r_m = get_r_m_encoding(second_byte),
     };
 
+    printf("%d\n", inst.mod);
     switch (inst.mod) {
     case 0b11:
     {
@@ -191,34 +239,24 @@ static int arithmetic_decode_imm_reg(u8 first_byte, u8** filebuffer, FILE* outfi
     }
     case 0b10:
     {
-        inst.disp_lo = **filebuffer;
-        (*filebuffer)++;
-        inst.disp_hi = **filebuffer;
-        (*filebuffer)++;
-        i32 displacement = (inst.disp_hi << 8 | inst.disp_lo);
-        (*filebuffer)++;
-        bytes_grabbed += 3;
+        i32 displacement = displacement_16bit(filebuffer);
+        bytes_grabbed += 2;
         printf("%d", displacement);
 
-        // Something has to be done here vv
-
-        /* inst.data = **filebuffer;
+        inst.data = **filebuffer;
         (*filebuffer)++;
         bytes_grabbed++;
-        u8 ext = **filebuffer;
-        (*filebuffer)++;
-        bytes_grabbed++;
-        inst.data = (ext << 8 | inst.data); */
-
 
         write_data_to_file(outfile, &inst, displacement);
+        break;
     }
     default:
-        printf("ERROR: No such MOD for arithmetic_imm_reg");
+        printf("ERROR: No such MOD for arithmetic_imm_reg: %d\n", inst.mod);
         exit(EXIT_FAILURE);
     }
     return bytes_grabbed;
 }
+
 
 static int add_decode_reg_either(u8 first_byte, u8** filebuffer, FILE* outfile) {
     return arithmetic_decode_reg_either("add", first_byte, filebuffer, outfile);
@@ -283,7 +321,6 @@ static int arithmetic_decode_reg_either(char* arithmetic_type, u8 first_byte, u8
     }
     return bytes_grabbed;
 }
-
 
 static int mov_decode_reg2reg(u8 first_byte, u8** filebuffer, FILE* outfile) {
     /* Decode mov_reg2reg. Return the number of bytes
