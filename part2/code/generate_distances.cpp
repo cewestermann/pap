@@ -140,6 +140,8 @@ errno_t write_json_and_results(Point* points_c1, Point* points_c2, size_t n_poin
 
   fprintf(json_file, "{\"pairs\":[\n");
 
+  f64 distance_sum = 0;
+
   for (size_t i = 0; i < n_points; i++) {
     Point p1 = points_c1[i];
     Point p2 = points_c2[i];
@@ -160,7 +162,13 @@ errno_t write_json_and_results(Point* points_c1, Point* points_c2, size_t n_poin
       fprintf(json_file, ",\n");
     else
       fprintf(json_file, "\n");
+
+    distance_sum += distance;
   }
+
+  f64 avg_distance = distance_sum / (f64)n_points;
+
+  fprintf(stdout, "Average Haversine distance: %.16f\n", avg_distance);
 
   fprintf(json_file, "]}");
   fclose(json_file);
