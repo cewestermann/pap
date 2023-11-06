@@ -24,6 +24,7 @@ typedef enum {
   INT,
   FLOAT,
   LITERAL,
+  END_OF_FILE,
   NUM_TYPES,
 } TokenType;
 
@@ -38,6 +39,7 @@ global const char* token_types[NUM_TYPES] = {
   "INT",
   "FLOAT",
   "LITERAL",
+  "END_OF_FILE",
 };
 
 typedef struct {
@@ -61,7 +63,8 @@ static void token_list_print() {
   }
 }
 
-static void parse_string(FILE* file, Token current_token) {
+
+static void tokenize_string(FILE* file, Token* current_token) {
   char string_buffer[32];            
   char* strp = string_buffer;
 
@@ -81,12 +84,11 @@ static void parse_string(FILE* file, Token current_token) {
   printf("\n");
 #endif
 
-  current_token.type = STRING;
-  current_token.value.string = string_buffer;
-  token_list_append(current_token);
+  current_token->type = STRING;
+  current_token->value.string = string_buffer;
 }
 
-static void parse_number(FILE* file, Token* current_token, int c) {
+static void tokenize_factor(FILE* file, Token* current_token, int c) {
   char num_buffer[32];
   char* nump = num_buffer;
 
@@ -117,7 +119,44 @@ static void parse_number(FILE* file, Token* current_token, int c) {
 
   current_token->type = FLOAT;
   current_token->value.number = number;
-  token_list_append(*current_token);
+}
+
+static Token tokenize(FILE* file) {
+  Token token = { 0 };
+
+  int c;
+  while ((c = fgetc(file)) != EOF && isspace((u8)c));
+
+  if (c == EOF) {
+    token.type = END_OF_FILE;
+    return token;
+  }
+
+  switch (c) {
+    case '{': token.type = L_BRACE; break;
+    case '}': token.type = R_BRACE; break;
+    case '[': token.type = L_BRACKET; break;
+    case ']': token.type = R_BRACKET; break;
+    case ':': token.type = COLON; break;
+    case ',': token.type = COMMA; break;
+    case '"': tokenize_string(file, &token); break;
+    case '-': 
+    case '0': 
+    case '1': 
+    case '2': 
+    case '3': 
+    case '4':
+    case '5': 
+    case '6': 
+    case '7': 
+    case '8': 
+    case '9': tokenize_factor(file, &token, c); break;
+    default:
+      {
+        fprintf(stderr, "No such character is accounted for: %c\n", (char)c);
+      }
+  }
+  return token;
 }
 
 int main(int argc, char* argv[]) {
@@ -134,57 +173,19 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
-  int c;
+  Token next_token;
 
-  while ((c = fgetc(file)) != EOF) {
-    Token current_token = {0};
-    if (!isspace((u8)c)) {
-      switch (c) {
-        case '{': 
-          {
-            current_token.type = L_BRACE;
-            token_list_append(current_token);
-          } break;
-        case '}':
-          {
-            current_token.type = R_BRACE;
-            token_list_append(current_token);
-          } break;
-        case '[':
-          {
-            current_token.type = L_BRACKET;
-            token_list_append(current_token);
-          } break;
-        case ']':
-          {
-            current_token.type = R_BRACKET;
-            token_list_append(current_token);
-          } break;
-        case ':':
-          {
-            current_token.type = COLON;
-            token_list_append(current_token);
-          } break;
-        case ',':
-          {
-            current_token.type = COMMA;
-            token_list_append(current_token);
-          } break;
-        case '"':
-          {
-            parse_string(file, current_token);
-          } break;
+  for (;;) {
+    next_token = tokenize(file);
 
-        case '-': 
-        case '0': case '1': case '2': case '3': case '4':
-        case '5': case '6': case '7': case '8': case '9':
-          {
-            parse_number(file, &current_token, c);
-          } break;
-      }
+    if (next_token.type == END_OF_FILE) {
+      printf("Reached end of file!\n");
+      break;
     }
+    printf("%s\n", token_types[next_token.type]);
   }
-#if 1
+
+#if 0
   printf("\n");
   token_list_print();
 #endif
