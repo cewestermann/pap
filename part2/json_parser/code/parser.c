@@ -1,5 +1,6 @@
 #include "tokenizer.h"
 
+#include <stdarg.h>
 #include <stdlib.h>
 
 #define MAX_PAIRS 1024
@@ -15,15 +16,6 @@ typedef struct {
 } JSONPair;
 
 JSONPair pairs[MAX_PAIRS];
-
-void parse_list() {
-}
-
-void parse_pair() {
-}
-
-void parse_entry() {
-}
 
 int main(int argc, char* argv[]) {
   if (argc < 2) {
