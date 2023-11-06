@@ -1,162 +1,28 @@
-#include <stdio.h>
+#include "tokenizer.h"
+
 #include <stdlib.h>
-#include <ctype.h>
-#include <string.h>
-#include <stdint.h>
-#include <stdbool.h>
 
-#define global static
-
-#define MAX_TOKENS 1024
-
-typedef uint8_t u8;
-typedef int64_t i64;
-typedef double f64;
-
-typedef enum {
-  L_BRACE,
-  R_BRACE,
-  L_BRACKET,
-  R_BRACKET,
-  COLON,
-  COMMA,
-  STRING,
-  INT,
-  FLOAT,
-  LITERAL,
-  END_OF_FILE,
-  NUM_TYPES,
-} TokenType;
-
-global const char* token_types[NUM_TYPES] = {
-  "L_BRACE",
-  "R_BRACE",
-  "L_BRACKET",
-  "R_BRACKET",
-  "COLON",
-  "COMMA",
-  "STRING",
-  "INT",
-  "FLOAT",
-  "LITERAL",
-  "END_OF_FILE",
-};
+#define MAX_PAIRS 1024
 
 typedef struct {
-  TokenType type;
-  union {
-    char* string;
-    f64 number;
-  } value;
-} Token;
+  char* key;
+  f64 value;
+} JSONEntry;
 
-global Token token_list[MAX_TOKENS];
-global size_t token_list_idx = 0;
+typedef struct {
+  JSONEntry pair1;
+  JSONEntry pair2;
+} JSONPair;
 
-static void token_list_append(Token token) {
-  token_list[token_list_idx++] = token;
+JSONPair pairs[MAX_PAIRS];
+
+void parse_list() {
 }
 
-static void token_list_print() {
-  for (size_t i = 0; i < token_list_idx; i++) {
-    printf("%s\n", token_types[token_list[i].type]);
-  }
+void parse_pair() {
 }
 
-
-static void tokenize_string(FILE* file, Token* current_token) {
-  char string_buffer[32];            
-  char* strp = string_buffer;
-
-  size_t count = 0;
-
-  int c;
-  while ((c = fgetc(file)) != EOF && c != '"') {
-    *strp++ = (char)c;
-    count++;
-  }
-  *strp = '\0';
-
-#if 0
-  for (size_t i = 0; i < count; i++) {
-    printf("%c", string_buffer[i]);
-  }
-  printf("\n");
-#endif
-
-  current_token->type = STRING;
-  current_token->value.string = string_buffer;
-}
-
-static void tokenize_factor(FILE* file, Token* current_token, int c) {
-  char num_buffer[32];
-  char* nump = num_buffer;
-
-  bool is_negative = false;
-  bool is_f64 = false;
-
-  size_t count = 0;
-
-  if (c == '-')
-    is_negative = true;
-
-  *nump++ = (char)c;
-
-  while ((c = fgetc(file)) != EOF && c != ',') {
-    if (count > sizeof(num_buffer) - 1) {
-      fprintf(stderr, "buffer overflow\n");
-      break;
-    }
-    *nump++ = (char)c;
-    count++;
-  }
-
-  *nump = '\0';
-
-  f64 number = strtod(num_buffer, NULL);
-
-  printf("%.16f\n", number);
-
-  current_token->type = FLOAT;
-  current_token->value.number = number;
-}
-
-static Token tokenize(FILE* file) {
-  Token token = { 0 };
-
-  int c;
-  while ((c = fgetc(file)) != EOF && isspace((u8)c));
-
-  if (c == EOF) {
-    token.type = END_OF_FILE;
-    return token;
-  }
-
-  switch (c) {
-    case '{': token.type = L_BRACE; break;
-    case '}': token.type = R_BRACE; break;
-    case '[': token.type = L_BRACKET; break;
-    case ']': token.type = R_BRACKET; break;
-    case ':': token.type = COLON; break;
-    case ',': token.type = COMMA; break;
-    case '"': tokenize_string(file, &token); break;
-    case '-': 
-    case '0': 
-    case '1': 
-    case '2': 
-    case '3': 
-    case '4':
-    case '5': 
-    case '6': 
-    case '7': 
-    case '8': 
-    case '9': tokenize_factor(file, &token, c); break;
-    default:
-      {
-        fprintf(stderr, "No such character is accounted for: %c\n", (char)c);
-      }
-  }
-  return token;
+void parse_entry() {
 }
 
 int main(int argc, char* argv[]) {
@@ -174,23 +40,15 @@ int main(int argc, char* argv[]) {
   }
 
   Token next_token;
+  Token lookahead;
 
-  for (;;) {
-    next_token = tokenize(file);
-
-    if (next_token.type == END_OF_FILE) {
-      printf("Reached end of file!\n");
-      break;
-    }
-    printf("%s\n", token_types[next_token.type]);
+  while ((next_token = tokenize(file)).type != END_OF_FILE) {
+    lookahead = tokenize(file);
+    printf("Peek token: %s\n", token_types[lookahead.type]);
+    break;
   }
 
-#if 0
-  printf("\n");
-  token_list_print();
-#endif
   fclose(file);
-  
   return EXIT_SUCCESS;
 }
 
